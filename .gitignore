@@ -53,3 +53,11 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Session logs (host/capture.py)
+logs/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class

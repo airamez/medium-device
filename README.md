@@ -32,7 +32,7 @@ Software cannot always name one open wire (I2C needs all four). This sketch test
 1. Keep VCC, GND, SDA, SCL as usual.
 2. Add one extra jumper if the module has **OUT**: **AS5600 OUT → Nano A0**.
 3. Arduino IDE → **File → Open** → `firmware/wire_check/wire_check.ino` → **Upload**.
-4. `python host/capture.py` (or Serial Monitor **115200**).
+4. `python host/capture.py --all` (or Serial Monitor **115200**).
 5. Read the **Verdict** line.
 
 | Verdict | Meaning |
@@ -146,8 +146,8 @@ That step copies our program **into the Nano**. After that, the Nano prints `a=1
 ```bash
 sudo pacman -S python-pyserial    # once, if you have not already
 cd ~/medium-tool                  # your clone path
-python host/capture.py
-# or:  python host/capture.py --port /dev/ttyUSB0
+python host/capture.py --all
+# or:  python host/capture.py --stream --port /dev/ttyUSB0
 ```
 
 Turn the magnet. The terminal should print changing lines:
@@ -216,7 +216,7 @@ Python on PC  -->  maps angle to letter  -->  console + log file
 | M03 needle, M02 shaft, E03 magnet | M01 outer race, M04 base, E01, E02, E05, PC |
 
 Firmware on the Nano is **dumb**: it only streams angles.  
-Python on the PC is **smart**: calibration, letter map, settle detection, logs.
+Python on the PC is **smart**: 8 reference letters each session, interpolate the ring, settle detection, logs.
 
 Repo layout:
 
@@ -532,64 +532,149 @@ Do this only after Phase 2 passes.
 
 ## Phase 4 — Letters and digits on the 360° circle
 
-36 symbols, **10° each**:
+36 symbols on **10° centers** (circle tool on the 10" board). Each sticker is
+~1" wide with a ~0.5" gap after it; landing in a gap types a **space**. At most
+one space is typed between words.
 
 ```
-  A  0-10°     ...    Z  250-260°
-  0  260-270°  ...    9  350-360°
+  A  center 0°    ...    Z  center 250°
+  0  center 260°  ...    9  center 350°
 ```
 
-`A` is wherever you calibrate. The rest follow clockwise (same direction as increasing `a=`).
+### Normal use — 8 reference letters (default)
+
+There is no `--calibrate` or `--auto`. Just run:
 
 ```bash
-# 1. Point magnet/needle at A, then:
-python host/capture.py --calibrate
-
-# 2. Hold still on a letter to print it (also writes logs/)
-python host/capture.py --letters
+python host/capture.py
 ```
 
-Raw debug (no letters): `python host/capture.py --all`
+Each session, point at these **8 letters** in order: **A**, **E**, **J**, **N**, **S**, **W**, **1**, **5**.
+Hold on the sticker, tap **space**. The rest of the ring is interpolated.
+
+While typing, the live line is:
+
+```text
+ 212.3°  B     | HELLO
+```
+
+sensor angle, current letter, then the text so far. Gaps type at most **one space** between words.
+
+To put A at north first, watch the raw angle and rotate the **base** (needle on A):
+
+```bash
+python host/capture.py --debug
+```
+
+`--delay` is how long the needle must hold before a letter is selected (saved
+in `host/config.json`):
+
+```bash
+python host/capture.py --delay 1.5
+```
+
+Raw angle list: `python host/capture.py --all`
+
+All flags: see **[capture.py options](#capturepy-options)** below, or `python host/capture.py --help`.
 
 ---
 
-## Phase 4b — Python details (legacy notes)
+## capture.py options
 
-Firmware still only prints `a=…`. Python does the rest.
+`host/capture.py` talks to the Nano over USB. Firmware only prints `a=…`. Python maps that to letters, waits for a pause, and writes the log.
 
-1. Open the same serial port at **115200**.
-2. **Calibrate:** point needle at **A**, save `offset`.
-3. **Map:**
+Usual command: `python host/capture.py` — point at A E J N S W 1 5, then type.
 
-   ```text
-   CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-   corrected = (angle - offset) % 360
-   char = CHARS[int(corrected // 10)]
-   ```
+### Modes (pick one)
 
-4. **Select:** if almost still for ~400–700 ms, print **one** character and append a log line. Wait until it moves before the next character.
+| Flag | What it does |
+|------|----------------|
+| *(none)* | 8 reference letters (A E J N S W 1 5); interpolate the rest; print when you pause |
+| `--debug` | Live pointer angle only (rotate the base so A is north) |
+| `--stream` | Print raw `a=…` angles (no letters) |
+| `--all` | Same as stream, but every sample |
+| `--span` | Record min/max angle while you turn a full circle |
 
-```bash
-python capture.py --port COM3           # Windows
-python capture.py --port /dev/ttyUSB0   # Linux
+### Serial
+
+| Option | Default | What it does |
+|--------|---------|--------------|
+| `--port` | first `/dev/ttyUSB*`, `/dev/ttyACM*`, or macOS `cu.usbserial*` | USB serial port. Example: `/dev/ttyUSB0` or `COM3` |
+| `--baud` | `115200` | Must match the sketch |
+
+### Letters (default)
+
+| Option | Default | What it does |
+|--------|---------|--------------|
+| `--delay` | `delay_s` from config (initially `1.0`) | Seconds the needle must hold on a letter before it is selected. Passing it saves the value in `host/config.json` as the new default |
+| `--still-deg` | `12` | A single-sample jump larger than this (degrees) counts as moving |
+| `--move-deg` | `4` | How far (degrees) you must leave the last letter before the next can print |
+| `--invert` | off | Force reverse direction (normally detected from this session’s 8 marks) |
+| `--log-dir` | `logs/` at the repo root | Folder for this session’s `.txt` (letters only) and `.log` (letters + angles) |
+
+### Raw stream (`--stream` / `--all`)
+
+| Option | Default | What it does |
+|--------|---------|--------------|
+| `--change-pct` | `10` | New line only when the angle moves this percent of a turn (`10` = 36°). Status still prints every 2 s |
+| `--all` | off | Print every sample. Ignores `--change-pct` |
+
+`--change-pct` (if you change it from 10) also switches to stream mode.
+
+### Span check (`--span`)
+
+| Option | Default | What it does |
+|--------|---------|--------------|
+| `--span-seconds` | `12` | How long to record while you turn a full circle |
+
+### Saved settings (`host/config.json`)
+
+`--delay` writes the selection delay:
+
+```json
+{
+  "delay_s": 1.0
+}
 ```
 
-Example log line:
+The 8 letters are measured **every session**. They are not the saved letter map.
+
+### Map (what Python does)
 
 ```text
-2026-08-10T21:15:03Z  M  angle=124.1
+CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+refs = A, E, J, N, S, W, 1, 5   # measured each session
+dial = interpolate(angle, refs)
+if within ±3.33° of a sticker center: that letter
+else: space (the ~0.5" gap between stickers)
 ```
 
-`host/capture.py` already streams angles (Phase 2). Letter settle + log files come next.
+Settle: same character for `delay_s` seconds → print **one** character, then you must leave that character before the next one.
+
+Example log line (`Session_YYYY_MM_DD_HH_MM.log`):
+
+```text
+2026-08-15T20:30:03Z  M  angle=124.1
+```
+
+### Examples
+
+```bash
+python host/capture.py --help
+python host/capture.py                              # 8 letters, then type
+python host/capture.py --debug                      # live angle; rotate base so A is north
+python host/capture.py --port /dev/ttyUSB0
+python host/capture.py --delay 1.5
+python host/capture.py --all                        # every raw angle
+```
 
 ---
 
 ## Phase 5 — End-to-end test
 
-1. Calibrate on **A**.
-2. Move to a letter, hold still → **one** character on console and in `logs/`.
-3. Move again → next character.
-4. Holding still must not repeat; dragging slowly across letters must not spam (raise dwell time if needed).
+1. `python host/capture.py` — point at A, E, J, N, S, W, 1, 5 (tap space on each).
+2. Move to a letter, hold still → **one** character (live line shows angle + letter + text).
+3. Move again → next character. A gap types at most **one space** between words.
 
 ---
 
@@ -616,7 +701,7 @@ The `.ino` is opened and uploaded **only** in Arduino IDE. Python is only `host/
 | Choose USB port | Tools → Port |
 | Send program to Nano | Upload button (→) |
 | See `a=…` in the IDE | Tools → Serial Monitor, baud **115200** |
-| See `a=…` on Arch | `python host/capture.py` **after** Upload succeeds |
+| See `a=…` on Arch | `python host/capture.py --all` **after** Upload succeeds |
 
 I2C address of AS5600 is `0x36`. Raw angle is 12-bit (0–4095) → degrees = `raw * 360 / 4096`.
 
@@ -628,4 +713,4 @@ I2C address of AS5600 is `0x36`. Raw angle is 12-bit (0–4095) → degrees = `r
 2. Phase 1: IDE + Python + port.  
 3. Phase 2: four wires, magnet over chip, upload sketch, Serial Monitor 115200.  
 4. Phase 3: bearing, shaft, magnet on **end**, needle, letters.  
-5. Phase 4–5: Python calibrate, settle, log.  
+5. Phase 4–5: `python host/capture.py`, 8 letters, settle, log.  
