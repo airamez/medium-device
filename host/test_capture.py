@@ -35,6 +35,14 @@ class DialToCharTests(unittest.TestCase):
         self.assertEqual(c.dial_to_char(220.0), "W")
 
 
+class IntDegTests(unittest.TestCase):
+    def test_drops_decimal_jitter(self):
+        self.assertEqual(c.int_deg(23.6), 23)
+        self.assertEqual(c.int_deg(23.7), 23)
+        self.assertEqual(c.int_deg(23.8), 23)
+        self.assertEqual(c.int_deg(359.9), 359)
+
+
 class InvertDetectTests(unittest.TestCase):
     def test_clockwise(self):
         points = pts(
@@ -245,6 +253,12 @@ class DelayConfigTests(unittest.TestCase):
 
     def test_default_when_missing(self):
         self.assertEqual(c.load_config()["delay_s"], c.DEFAULT_DELAY_S)
+        self.assertEqual(c.load_config()["wrap_cols"], c.DEFAULT_WRAP_COLS)
+
+    def test_save_and_load_wrap(self):
+        points = pts(("A", 10), ("E", 50))
+        c.save_config(points, invert=False, wrap_cols=40)
+        self.assertEqual(c.load_config()["wrap_cols"], 40)
 
     def test_save_and_load_delay(self):
         points = pts(("A", 10), ("E", 50))
@@ -368,6 +382,19 @@ class AllowEmitTests(unittest.TestCase):
 
     def test_one_space_between_words(self):
         self.assertTrue(c.allow_emit(" ", ["H", "I"]))
+
+    def test_no_space_after_newline(self):
+        self.assertFalse(c.allow_emit(" ", ["H", "I", "\n"]))
+
+
+class WrapLineTests(unittest.TestCase):
+    def test_wraps_at_space_after_limit(self):
+        self.assertTrue(c.should_wrap_line("A" * 60, " ", 60))
+        self.assertFalse(c.should_wrap_line("A" * 59, " ", 60))
+        self.assertFalse(c.should_wrap_line("A" * 60, "B", 60))
+
+    def test_space_needs_longer_pause(self):
+        self.assertGreater(c.still_needed(" "), c.still_needed("A"))
 
 
 class OffsetFallbackTests(unittest.TestCase):

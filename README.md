@@ -566,11 +566,11 @@ To put A at north first, watch the raw angle and rotate the **base** (needle on 
 python host/capture.py --debug
 ```
 
-`--delay` is how long the needle must hold before a letter is selected (saved
-in `host/config.json`):
+`--wrap` is how many characters go on a line before the next space starts a
+new line (saved in `host/config.json`):
 
 ```bash
-python host/capture.py --delay 1.5
+python host/capture.py --wrap 60
 ```
 
 Raw angle list: `python host/capture.py --all`
@@ -606,7 +606,8 @@ Usual command: `python host/capture.py` — point at A E J N S W 1 5, then type.
 
 | Option | Default | What it does |
 |--------|---------|--------------|
-| `--delay` | `delay_s` from config (initially `1.0`) | Seconds the needle must hold on a letter before it is selected. Passing it saves the value in `host/config.json` as the new default |
+| `--delay` | `delay_s` from config (initially `1.0`) | Unused for typing now; kept for config compatibility |
+| `--wrap` | `wrap_cols` from config (initially `60`) | New line after this many characters, at the **next space** (end of a word). Saved in `host/config.json` |
 | `--still-deg` | `12` | A single-sample jump larger than this (degrees) counts as moving |
 | `--move-deg` | `4` | How far (degrees) you must leave the last letter before the next can print |
 | `--invert` | off | Force reverse direction (normally detected from this session’s 8 marks) |
@@ -629,11 +630,12 @@ Usual command: `python host/capture.py` — point at A E J N S W 1 5, then type.
 
 ### Saved settings (`host/config.json`)
 
-`--delay` writes the selection delay:
+`--wrap` writes the line length:
 
 ```json
 {
-  "delay_s": 1.0
+  "delay_s": 1.0,
+  "wrap_cols": 60
 }
 ```
 
@@ -649,7 +651,7 @@ if within ±3.33° of a sticker center: that letter
 else: space (the ~0.5" gap between stickers)
 ```
 
-Settle: same character for `delay_s` seconds → print **one** character, then you must leave that character before the next one.
+Typing uses **integer degrees** only (23.7° → 23°). A letter types when you stop on it. A space types only if you **pause in a gap** (moving from one letter to the next does not type a space). After `wrap_cols` characters, the next space starts a new line (never mid-word).
 
 Example log line (`Session_YYYY_MM_DD_HH_MM.log`):
 
@@ -664,7 +666,7 @@ python host/capture.py --help
 python host/capture.py                              # 8 letters, then type
 python host/capture.py --debug                      # live angle; rotate base so A is north
 python host/capture.py --port /dev/ttyUSB0
-python host/capture.py --delay 1.5
+python host/capture.py --wrap 60
 python host/capture.py --all                        # every raw angle
 ```
 
@@ -674,7 +676,7 @@ python host/capture.py --all                        # every raw angle
 
 1. `python host/capture.py` — point at A, E, J, N, S, W, 1, 5 (tap space on each).
 2. Move to a letter, hold still → **one** character (live line shows angle + letter + text).
-3. Move again → next character. A gap types at most **one space** between words.
+3. Move to the next letter — passing the gap does **not** type a space. Pause in a gap for a word space. After 60 characters, the next space starts a new line.
 
 ---
 

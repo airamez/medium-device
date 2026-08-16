@@ -49,6 +49,9 @@ PITCH_INCH = LETTER_INCH + GAP_INCH
 LETTER_DEG = SECTOR_DEG * (LETTER_INCH / PITCH_INCH)  # ~6.67°
 HALF_LETTER_DEG = LETTER_DEG / 2.0  # ~3.33° from sticker center
 DEFAULT_DELAY_S = 1.0
+DEFAULT_WRAP_COLS = 60
+STILL_SAMPLES = 4  # same letter this many times = stopped
+SPACE_STILL_SAMPLES = 25  # gaps need a real pause; skip letter-to-letter transit
 CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
 
 
@@ -73,6 +76,11 @@ def parse_angle(line: str) -> float | None:
         return float(value)
     except ValueError:
         return None
+
+
+def int_deg(angle: float) -> int:
+    """Drop decimals. 23.6 / 23.7 / 23.8 all become 23."""
+    return int(angle) % 360
 
 
 def circular_delta(a: float, b: float) -> float:
@@ -127,7 +135,13 @@ def offset_angle(angle: float, session_a: float, saved_a: float) -> float:
 
 def load_config() -> dict:
     if not CONFIG_PATH.exists():
-        return {"offset": 0.0, "invert": False, "points": [], "delay_s": DEFAULT_DELAY_S}
+        return {
+            "offset": 0.0,
+            "invert": False,
+            "points": [],
+            "delay_s": DEFAULT_DELAY_S,
+            "wrap_cols": DEFAULT_WRAP_COLS,
+        }
     data = json.loads(CONFIG_PATH.read_text())
     points = []
     for item in data.get("points") or []:
@@ -142,24 +156,40 @@ def load_config() -> dict:
     delay_s = float(data.get("delay_s", DEFAULT_DELAY_S))
     if delay_s <= 0:
         delay_s = DEFAULT_DELAY_S
+    wrap_cols = int(data.get("wrap_cols", DEFAULT_WRAP_COLS))
+    if wrap_cols < 10:
+        wrap_cols = DEFAULT_WRAP_COLS
     return {
         "offset": offset,
         "invert": bool(data.get("invert", False)),
         "points": points,
         "delay_s": delay_s,
+        "wrap_cols": wrap_cols,
     }
 
 
 def save_config(
-    points: list[dict], invert: bool = False, delay_s: float | None = None
+    points: list[dict],
+    invert: bool = False,
+    delay_s: float | None = None,
+    wrap_cols: int | None = None,
 ) -> None:
+    cfg = load_config()
     if delay_s is None:
-        delay_s = load_config()["delay_s"]
-    a = next((p["angle"] for p in points if p["char"] == "A"), points[0]["angle"])
+        delay_s = cfg["delay_s"]
+    if wrap_cols is None:
+        wrap_cols = cfg["wrap_cols"]
+    if wrap_cols < 10:
+        wrap_cols = DEFAULT_WRAP_COLS
+    a = next(
+        (p["angle"] for p in points if p["char"] == "A"),
+        points[0]["angle"] if points else 0.0,
+    )
     payload = {
-        "offset": round(a, 3),
+        "offset": round(float(a), 3),
         "invert": invert,
         "delay_s": round(float(delay_s), 3),
+        "wrap_cols": int(wrap_cols),
         "points": [
             {"char": p["char"], "angle": round(p["angle"], 3)} for p in points
         ],
@@ -232,9 +262,13 @@ def raw_to_dial(angle: float, points: list[dict], invert: bool) -> float:
     return nearest["dial"]
 
 
+def nearest_letter_idx(dial: float) -> int:
+    return int((dial + SECTOR_DEG / 2.0) // SECTOR_DEG) % len(CHARS)
+
+
 def dial_to_char(dial: float) -> str:
     """Letter if inside the ~1\" sticker, space if in the ~0.5\" gap."""
-    idx = round(dial / SECTOR_DEG) % len(CHARS)
+    idx = nearest_letter_idx(dial)
     center = (idx * SECTOR_DEG) % 360.0
     if circular_delta(dial, center) <= HALF_LETTER_DEG + 1e-9:
         return CHARS[idx]
@@ -264,7 +298,17 @@ def allow_emit(char: str, typed: list[str]) -> bool:
     """At most one space in a row, and never a leading space."""
     if char != " ":
         return True
-    return bool(typed) and typed[-1] != " "
+    return bool(typed) and typed[-1] not in (" ", "\n")
+
+
+def still_needed(char: str) -> int:
+    """Letters type quickly; a space only after a real pause in the gap."""
+    return SPACE_STILL_SAMPLES if char == " " else STILL_SAMPLES
+
+
+def should_wrap_line(line: str, char: str, wrap_cols: int) -> bool:
+    """New line after wrap_cols, but only at a space (end of a word)."""
+    return char == " " and len(line) >= wrap_cols
 
 
 def open_serial(port: str, baud: int) -> serial.Serial:
@@ -332,8 +376,11 @@ def confirm_angle(
     """
     if prompt:
         print(prompt, flush=True)
+    if live_label:
+        print(f"{live_label}  …     ", end="", flush=True)
     recent: list[float] = []
     fd = sys.stdin.fileno()
+    old_timeout = ser.timeout
     try:
         import select
         import termios
@@ -349,23 +396,24 @@ def confirm_angle(
     old = termios.tcgetattr(fd)
     try:
         tty.setcbreak(fd)
+        ser.timeout = 0.05
         while True:
-            ready, _, _ = select.select([ser, sys.stdin], [], [], 0.05)
-            if ser in ready:
-                angle = _decode_angle(ser.readline())
-                if angle is not None:
-                    recent.append(angle)
-                    if len(recent) > 25:
-                        recent = recent[-25:]
-                    extra = ""
-                    if label_fn is not None:
-                        extra = f"  {_glyph(label_fn(angle))}"
-                    if live_label:
-                        line = f"{live_label}  {angle:5.1f}°{extra}"
-                    else:
-                        line = f"  {angle:5.1f}°{extra}"
-                    print(f"\r{line}     ", end="", flush=True)
-            if sys.stdin in ready:
+            angle = _decode_angle(ser.readline())
+            if angle is not None:
+                recent.append(angle)
+                if len(recent) > 25:
+                    recent = recent[-25:]
+                extra = ""
+                if label_fn is not None:
+                    extra = f"  {_glyph(label_fn(angle))}"
+                shown = int_deg(angle)
+                if live_label:
+                    line = f"{live_label}  {shown:3d}°{extra}"
+                else:
+                    line = f"  {shown:3d}°{extra}"
+                print(f"\r{line}     ", end="", flush=True)
+            ready, _, _ = select.select([sys.stdin], [], [], 0.0)
+            if ready:
                 sys.stdin.read(1)
                 if end_line:
                     print()
@@ -374,11 +422,12 @@ def confirm_angle(
         print()
         raise
     finally:
+        ser.timeout = old_timeout
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
     if recent:
-        return circular_mean(recent[-12:])
-    return read_stable_angle(ser)
+        return float(int_deg(circular_mean(recent[-12:])))
+    return float(int_deg(read_stable_angle(ser)))
 
 
 def cmd_span(ser: serial.Serial, seconds: float) -> int:
@@ -433,7 +482,7 @@ def calibrate_compass(
     ser: serial.Serial, force_invert: bool
 ) -> tuple[list[dict], bool]:
     """Eight compass stickers; interpolate the other letters from these."""
-    print("Hold on the letter, tap space.\n")
+    print("Point at A, then E J N S W 1 5. Tap space on each.\n")
     points: list[dict] = []
     for ch, _compass, _name in COMPASS_REFS:
         while True:
@@ -449,12 +498,19 @@ def calibrate_compass(
                 exp = expected_step_deg(prev["char"], ch)
                 step_ok = abs(got - exp) <= COMPASS_STEP_TOL_DEG
             if step_ok:
-                print(f"\r{ch}  {angle:5.1f}°")
-                points.append(make_point(ch, angle))
+                print(f"\r{ch}  {int_deg(angle):3d}°")
+                points.append(make_point(ch, float(int_deg(angle))))
                 break
-            print(f"\r{ch}  {angle:5.1f}°  retry")
+            print(f"\r{ch}  {int_deg(angle):3d}°  retry")
 
     invert = True if force_invert else detect_invert(points)
+    print("\nCalibration done.")
+    print("Move the needle off 5, then tap space to start typing.\n")
+    try:
+        confirm_angle(ser, live_label="go")
+    except EOFError:
+        print()
+        sys.exit("Cancelled.")
     return points, invert
 
 
@@ -465,13 +521,19 @@ def cmd_letters(
     move_deg: float,
     invert: bool,
     log_dir: Path,
+    wrap_cols: int | None = None,
 ) -> int:
     del still_deg, move_deg  # reserved CLI knobs; settle uses delay + leave-letter
     cfg = load_config()
+    if wrap_cols is None:
+        wrap_cols = cfg["wrap_cols"]
+    elif wrap_cols != cfg["wrap_cols"]:
+        save_config(cfg["points"], invert or cfg["invert"], cfg["delay_s"], wrap_cols)
+        print(f"Saved wrap_cols={wrap_cols} in config.json")
     if delay_s is None:
         delay_s = cfg["delay_s"]
     elif abs(delay_s - cfg["delay_s"]) > 1e-9:
-        save_config(cfg["points"], invert or cfg["invert"], delay_s)
+        save_config(cfg["points"], invert or cfg["invert"], delay_s, wrap_cols)
         print(f"Saved delay of {delay_s:.2f}s in config.json")
 
     print()
@@ -488,26 +550,41 @@ def cmd_letters(
     point_txt = " ".join(f"{p['char']}={p['angle']:.2f}" for p in points)
     header = (
         f"# session start {started.isoformat(timespec='seconds')}\n"
-        f"# invert={invert} delay_s={delay_s} letter_in={LETTER_INCH} gap_in={GAP_INCH}\n"
+        f"# invert={invert} delay_s={delay_s} wrap_cols={wrap_cols} "
+        f"letter_in={LETTER_INCH} gap_in={GAP_INCH}\n"
         f"# points {point_txt}\n"
     )
     txt_path.write_text(header)
     log_path.write_text(header)
 
-    print(f"Logging {txt_name} / {log_name}\n")
+    print(f"Logging {txt_name} / {log_name}")
+    print(f"Stop on a letter to type it. Pause in a gap for a space. Wrap at {wrap_cols}.\n")
 
-    candidate: str | None = None
-    candidate_since: float | None = None
+    last_char: str | None = None
+    still_n = 0
     last_emitted: str | None = None
     must_leave = False
+    skip_first = True
     typed: list[str] = []
+    line = ""
 
-    def show(angle: float, char: str) -> None:
+    def show(ang_i: int, seen: str) -> None:
+        # Only the current wrap-line is redrawn, so the terminal never wraps this.
         print(
-            f"\r{angle:6.1f}°  {_glyph(char):<5} | {''.join(typed)}",
+            f"\r{ang_i:3d}° {_glyph(seen):<5}| {line}\033[K",
             end="",
             flush=True,
         )
+
+    def write_out(text: str, ang_i: int, glyph: str) -> None:
+        for item in (txt_path,):
+            with item.open("a") as fh:
+                fh.write(text)
+                fh.flush()
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with log_path.open("a") as fh:
+            fh.write(f"{ts}  {log_glyph(glyph)}  angle={ang_i}\n")
+            fh.flush()
 
     try:
         while True:
@@ -518,38 +595,51 @@ def cmd_letters(
             if angle is None:
                 continue
 
-            now = time.time()
-            char = angle_to_char(angle, invert=invert, points=points)
-            show(angle, char)
+            ang_i = int_deg(angle)
+            char = angle_to_char(float(ang_i), invert=invert, points=points)
+            show(ang_i, char)
+
+            if skip_first:
+                last_emitted = char
+                last_char = char
+                must_leave = True
+                skip_first = False
+                continue
+
+            if char != last_char:
+                last_char = char
+                still_n = 1
+            else:
+                still_n += 1
 
             if must_leave:
-                if char != last_emitted:
-                    must_leave = False
-                    candidate = char
-                    candidate_since = now
-                continue
-
-            if char != candidate:
-                candidate = char
-                candidate_since = now
-                continue
-
-            if candidate_since is not None and (now - candidate_since) >= delay_s:
-                if not allow_emit(char, typed):
-                    candidate_since = None
+                if char == last_emitted:
                     continue
-                typed.append(char)
-                show(angle, char)
-                ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-                with txt_path.open("a") as fh:
-                    fh.write(char)
-                    fh.flush()
-                with log_path.open("a") as fh:
-                    fh.write(f"{ts}  {log_glyph(char)}  angle={angle:.1f}\n")
-                    fh.flush()
-                last_emitted = char
+                must_leave = False
+
+            if must_leave or still_n < still_needed(char):
+                continue
+            if not allow_emit(char, typed):
+                continue
+
+            if should_wrap_line(line, char, wrap_cols):
+                print()
+                line = ""
+                typed.append("\n")
+                write_out("\n", ang_i, " ")
+                last_emitted = " "
                 must_leave = True
-                candidate_since = None
+                still_n = 0
+                show(ang_i, char)
+                continue
+
+            line += char
+            typed.append(char)
+            show(ang_i, char)
+            write_out(char, ang_i, char)
+            last_emitted = char
+            must_leave = True
+            still_n = 0
     except KeyboardInterrupt:
         print("\nStopped.", flush=True)
         return 0
@@ -563,7 +653,7 @@ def cmd_debug(ser: serial.Serial) -> int:
             angle = _decode_angle(ser.readline())
             if angle is None:
                 continue
-            print(f"\r  {angle:6.1f}°   ", end="", flush=True)
+            print(f"\r  {int_deg(angle):3d}°   ", end="", flush=True)
     except KeyboardInterrupt:
         print()
         return 0
@@ -656,6 +746,16 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--wrap",
+        type=int,
+        default=None,
+        dest="wrap_cols",
+        help=(
+            "Start a new line after this many characters, at the next space "
+            f"(saved as wrap_cols in config.json; default {DEFAULT_WRAP_COLS})"
+        ),
+    )
+    parser.add_argument(
         "--still-deg",
         type=float,
         default=12.0,
@@ -710,6 +810,7 @@ def main() -> int:
             args.move_deg,
             args.invert,
             args.log_dir,
+            wrap_cols=args.wrap_cols,
         )
     finally:
         ser.close()
