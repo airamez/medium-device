@@ -216,7 +216,7 @@ Python on PC  -->  maps angle to letter  -->  console + log file
 | M03 needle, M02 shaft, E03 magnet | M01 outer race, M04 base, E01, E02, E05, PC |
 
 Firmware on the Nano is **dumb**: it only streams angles.  
-Python on the PC is **smart**: 8 reference letters each session, interpolate the ring, settle detection, logs.
+Python on the PC is **smart**: 36-letter map, A/J/S/1 confirm each session, settle detection, logs.
 
 Repo layout:
 
@@ -532,25 +532,39 @@ Do this only after Phase 2 passes.
 
 ## Phase 4 — Letters and digits on the 360° circle
 
-36 symbols on **10° centers** (circle tool on the 10" board). Each sticker is
-~1" wide with a ~0.5" gap after it; landing in a gap types a **space**. At most
-one space is typed between words.
+36 symbols on **10° centers**. Each 10° sector is one letter or digit (no spaces).
 
 ```
   A  center 0°    ...    Z  center 250°
   0  center 260°  ...    9  center 350°
 ```
 
-### Normal use — 8 reference letters (default)
+### One-time map — every letter (`--calibrate`)
 
-There is no `--calibrate` or `--auto`. Just run:
+The base and magnet are not a perfect 10° grid. Capture the real sensor
+angle of each printed letter once:
+
+```bash
+python host/capture.py --calibrate
+```
+
+Point at **A, B, C, … Z, 0–9** clockwise and tap space on each tick. That
+writes all 36 angles to `host/config.json`. If a tap lands on the last mark, the previous two are redone once. If
+they are still close, the reading is saved (that chip sector is
+compressed). A tap that goes backward or lands on an earlier letter is
+rejected (that is how 4–9 once sat on A–C and A typed as 9). Redo
+`--calibrate` if you remount the magnet, reprint the dial, or letters
+stay wrong after a 4-point confirm.
+
+### Every session — confirm A, J, S, 1
 
 ```bash
 python host/capture.py
 ```
 
-Each session, point at these **8 letters** in order: **A**, **E**, **J**, **N**, **S**, **W**, **1**, **5**.
-Hold on the sticker, tap **space**. The rest of the ring is interpolated.
+Point at **A** (top), **J** (right), **S** (bottom), **1** (left). The
+saved 36-letter map is stretched onto those four so a rotated or slightly
+unbalanced base still hits the right characters.
 
 While typing, the live line is:
 
@@ -558,13 +572,23 @@ While typing, the live line is:
  212.3°  B     | HELLO
 ```
 
-sensor angle, current letter, then the text so far. Gaps type at most **one space** between words.
+sensor angle, current letter, then the text so far.
 
 To put A at north first, watch the raw angle and rotate the **base** (needle on A):
 
 ```bash
 python host/capture.py --debug
 ```
+
+If letters are off (pointing at O and getting P), do not guess — log it:
+
+```bash
+python host/capture.py --diagnostic
+```
+
+Point at A, J, S, 1 as usual. Then point at any printed letter, press Enter,
+type that letter, press Enter again. Repeat around the ring (O, P, and a few
+cardinals are enough). Ctrl+C writes a summary. Send `logs/Diagnostic_*.log`.
 
 `--wrap` is how many characters go on a line before the next space starts a
 new line (saved in `host/config.json`):
@@ -583,14 +607,16 @@ All flags: see **[capture.py options](#capturepy-options)** below, or `python ho
 
 `host/capture.py` talks to the Nano over USB. Firmware only prints `a=…`. Python maps that to letters, waits for a pause, and writes the log.
 
-Usual command: `python host/capture.py` — point at A E J N S W 1 5, then type.
+Usual command: `python host/capture.py` — confirm A, J, S, 1 against the saved 36-letter map, then type.
 
 ### Modes (pick one)
 
 | Flag | What it does |
 |------|----------------|
-| *(none)* | 8 reference letters (A E J N S W 1 5); interpolate the rest; print when you pause |
+| `--calibrate` | Point at all 36 letters; save raw angles in `host/config.json` |
+| *(none)* | Confirm A, J, S, 1; align the saved 36-letter map; print when you pause |
 | `--debug` | Live pointer angle only (rotate the base so A is north) |
+| `--diagnostic` | After A/J/S/1: press Enter on a letter, type the printed character, log raw/predicted/error to `logs/Diagnostic_*.log` |
 | `--stream` | Print raw `a=…` angles (no letters) |
 | `--all` | Same as stream, but every sample |
 | `--span` | Record min/max angle while you turn a full circle |
@@ -606,11 +632,11 @@ Usual command: `python host/capture.py` — point at A E J N S W 1 5, then type.
 
 | Option | Default | What it does |
 |--------|---------|--------------|
-| `--delay` | `delay_s` from config (initially `1.0`) | Unused for typing now; kept for config compatibility |
+| `--delay` | `delay_s` from config (initially `1.0`) | Seconds the needle must stay inside the stop tolerance before a letter types |
+| `--still-tol` | `still_tol_deg` from config (initially `2.0`) | How many degrees the reading may wobble and still count as stopped (handles 10.9 vs 11.0). Saved in `host/config.json` |
 | `--wrap` | `wrap_cols` from config (initially `60`) | New line after this many characters, at the **next space** (end of a word). Saved in `host/config.json` |
-| `--still-deg` | `12` | A single-sample jump larger than this (degrees) counts as moving |
 | `--move-deg` | `4` | How far (degrees) you must leave the last letter before the next can print |
-| `--invert` | off | Force reverse direction (normally detected from this session’s 8 marks) |
+| `--invert` | off | Force reverse direction (normally taken from the saved `--calibrate` map) |
 | `--log-dir` | `logs/` at the repo root | Folder for this session’s `.txt` (letters only) and `.log` (letters + angles) |
 
 ### Raw stream (`--stream` / `--all`)
@@ -635,23 +661,24 @@ Usual command: `python host/capture.py` — point at A E J N S W 1 5, then type.
 ```json
 {
   "delay_s": 1.0,
-  "wrap_cols": 60
+  "wrap_cols": 60,
+  "still_tol_deg": 2.0
 }
 ```
 
-The 8 letters are measured **every session**. They are not the saved letter map.
+`--calibrate` writes all 36 letters. Each session only measures A, J, S, 1
+and aligns that saved map (it does not overwrite the 36 marks).
 
 ### Map (what Python does)
 
 ```text
-CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-refs = A, E, J, N, S, W, 1, 5   # measured each session
-dial = interpolate(angle, refs)
-if within ±3.33° of a sticker center: that letter
-else: space (the ~0.5" gap between stickers)
+--calibrate  →  save raw angle of A–Z and 0–9
+each run     →  measure A, J, S, 1
+                stretch the saved 36 marks onto those four
+                letter = nearest saved mark
 ```
 
-Typing uses **integer degrees** only (23.7° → 23°). A letter types when you stop on it. A space types only if you **pause in a gap** (moving from one letter to the next does not type a space). After `wrap_cols` characters, the next space starts a new line (never mid-word).
+The live angle keeps decimals. **Stopped** means the reading stays within `still_tol_deg` (default 2°) of a lock, so 10.9 and 11.0 count as the same stop. After `delay_s` seconds in that band, one character types. After `wrap_cols` characters, the next space starts a new line (never mid-word).
 
 Example log line (`Session_YYYY_MM_DD_HH_MM.log`):
 
@@ -663,10 +690,13 @@ Example log line (`Session_YYYY_MM_DD_HH_MM.log`):
 
 ```bash
 python host/capture.py --help
-python host/capture.py                              # 8 letters, then type
+python host/capture.py --calibrate                  # save all 36 letter positions
+python host/capture.py                              # confirm A J S 1, then type
 python host/capture.py --debug                      # live angle; rotate base so A is north
+python host/capture.py --diagnostic                 # Enter + type the printed letter; write Diagnostic_*.log
 python host/capture.py --port /dev/ttyUSB0
 python host/capture.py --wrap 60
+python host/capture.py --still-tol 2
 python host/capture.py --all                        # every raw angle
 ```
 
@@ -674,9 +704,9 @@ python host/capture.py --all                        # every raw angle
 
 ## Phase 5 — End-to-end test
 
-1. `python host/capture.py` — point at A, E, J, N, S, W, 1, 5 (tap space on each).
+1. `python host/capture.py --calibrate` once, then `python host/capture.py` — confirm A, J, S, 1, then type.
 2. Move to a letter, hold still → **one** character (live line shows angle + letter + text).
-3. Move to the next letter — passing the gap does **not** type a space. Pause in a gap for a word space. After 60 characters, the next space starts a new line.
+3. Move to the next letter and hold still. After 60 characters a new line starts.
 
 ---
 
@@ -715,4 +745,4 @@ I2C address of AS5600 is `0x36`. Raw angle is 12-bit (0–4095) → degrees = `r
 2. Phase 1: IDE + Python + port.  
 3. Phase 2: four wires, magnet over chip, upload sketch, Serial Monitor 115200.  
 4. Phase 3: bearing, shaft, magnet on **end**, needle, letters.  
-5. Phase 4–5: `python host/capture.py`, 8 letters, settle, log.  
+5. Phase 4–5: `python host/capture.py`, set A, settle, log.  

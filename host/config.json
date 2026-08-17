@@ -1,151 +1,153 @@
 {
-  "offset": 165.4,
+  "offset": 327.35,
   "invert": false,
   "delay_s": 1.0,
+  "wrap_cols": 60,
+  "still_tol_deg": 2.0,
   "points": [
     {
       "char": "A",
-      "angle": 165.4
+      "angle": 327.35
     },
     {
       "char": "B",
-      "angle": 175.941
+      "angle": 338.1
     },
     {
       "char": "C",
-      "angle": 185.486
+      "angle": 347.825
     },
     {
       "char": "D",
-      "angle": 194.65
+      "angle": 358.917
     },
     {
       "char": "E",
-      "angle": 204.0
+      "angle": 9.625
     },
     {
       "char": "F",
-      "angle": 210.036
+      "angle": 20.542
     },
     {
       "char": "G",
-      "angle": 218.205
+      "angle": 30.4
     },
     {
       "char": "H",
-      "angle": 224.318
+      "angle": 41.0
     },
     {
       "char": "I",
-      "angle": 233.718
+      "angle": 51.5
     },
     {
       "char": "J",
-      "angle": 241.682
+      "angle": 63.017
     },
     {
       "char": "K",
-      "angle": 245.755
+      "angle": 73.433
     },
     {
       "char": "L",
-      "angle": 257.386
+      "angle": 83.917
     },
     {
       "char": "M",
-      "angle": 263.718
+      "angle": 94.25
     },
     {
       "char": "N",
-      "angle": 272.091
+      "angle": 104.642
     },
     {
       "char": "O",
-      "angle": 282.105
+      "angle": 115.642
     },
     {
       "char": "P",
-      "angle": 291.836
+      "angle": 125.95
     },
     {
       "char": "Q",
-      "angle": 302.627
+      "angle": 136.383
     },
     {
       "char": "R",
-      "angle": 313.473
+      "angle": 147.458
     },
     {
       "char": "S",
-      "angle": 325.955
+      "angle": 158.333
     },
     {
       "char": "T",
-      "angle": 335.441
+      "angle": 168.475
     },
     {
       "char": "U",
-      "angle": 346.091
+      "angle": 178.45
     },
     {
       "char": "V",
-      "angle": 357.882
+      "angle": 186.917
     },
     {
       "char": "W",
-      "angle": 10.109
+      "angle": 196.25
     },
     {
       "char": "X",
-      "angle": 20.291
+      "angle": 204.808
     },
     {
       "char": "Y",
-      "angle": 31.682
+      "angle": 214.15
     },
     {
       "char": "Z",
-      "angle": 41.65
+      "angle": 222.658
     },
     {
       "char": "0",
-      "angle": 55.882
+      "angle": 231.483
     },
     {
       "char": "1",
-      "angle": 66.636
+      "angle": 240.667
     },
     {
       "char": "2",
-      "angle": 81.018
+      "angle": 249.017
     },
     {
       "char": "3",
-      "angle": 94.7
+      "angle": 258.983
     },
     {
       "char": "4",
-      "angle": 107.682
+      "angle": 268.675
     },
     {
       "char": "5",
-      "angle": 116.109
+      "angle": 277.367
     },
     {
       "char": "6",
-      "angle": 127.818
+      "angle": 286.992
     },
     {
       "char": "7",
-      "angle": 136.7
+      "angle": 296.542
     },
     {
       "char": "8",
-      "angle": 146.159
+      "angle": 307.508
     },
     {
       "char": "9",
-      "angle": 156.232
+      "angle": 317.392
     }
   ]
 }
