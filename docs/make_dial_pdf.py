@@ -45,69 +45,86 @@ def polar(cx: float, cy: float, i: float, r: float) -> tuple[float, float]:
     return cx + r * math.cos(std), cy + r * math.sin(std)
 
 
+def glyph_width(s: str, size: float) -> float:
+    return H_BOLD[s] / 1000.0 * size
+
+
 def text_at(x: float, y: float, s: str, size: float) -> str:
-    w = H_BOLD[s] / 1000.0 * size
+    w = glyph_width(s, size)
     return (
         f"BT /F1 {size:.2f} Tf {x - w / 2.0:.3f} {y - size * 0.35:.3f} Td "
         f"({pdf_escape(s)}) Tj ET\n"
     )
 
 
+def radial_unit(i: float) -> tuple[float, float]:
+    """Unit vector from center toward mark i (A = north, clockwise)."""
+    std = math.radians(90.0 - i * 10.0)
+    return math.cos(std), math.sin(std)
+
+
 def build_stream(inches: float, page_w: float, page_h: float) -> str:
     radius = inches * IN / 2.0
-    cx, cy = page_w / 2.0, page_h / 2.0 + 18.0
+    # Leave room under the south letters for the caption.
+    cy_shift = 28.0 if inches <= 7 else 36.0
+    cx, cy = page_w / 2.0, page_h / 2.0 + cy_shift
     scale = inches / 7.0
-    body = 14.0 * scale
-    ref = 16.0 * scale
-    tick = 0.18 * IN * min(scale, 1.15)
-    tick_ref = 0.28 * IN * min(scale, 1.15)
-    letter_r = radius - 0.42 * IN * min(scale, 1.2)
+    body = 13.0 * min(scale, 1.15)
+    ref = 15.0 * min(scale, 1.15)
+    hub = 4.0 / 25.4 * IN
 
     parts: list[str] = []
-    parts.append("1.5 w 0 0 0 RG\n")
+    parts.append("1.4 w 0 0 0 RG\n")
     parts.append(circle(cx, cy, radius))
 
-    parts.append("0.4 w 0.55 0.55 0.55 RG\n")
-    parts.append(circle(cx, cy, letter_r - 0.18 * IN * min(scale, 1.2)))
+    for i, ch in enumerate(CHARS):
+        size = ref if ch in REFS else body
+        bar = glyph_width(ch, size)
+        ux, uy = radial_unit(i)
+        tx, ty = -uy, ux
+        # End just outside the cut circle, immediately before the letter.
+        end_r = radius + 0.05 * IN
+        x1, y1 = cx + ux * end_r, cy + uy * end_r
+        if ch in REFS:
+            parts.append("1.1 w 0 0 0 RG\n")
+        else:
+            parts.append("0.55 w 0 0 0 RG\n")
+        parts.append(f"{cx:.3f} {cy:.3f} m {x1:.3f} {y1:.3f} l S\n")
+        parts.append("1.05 w 0 0 0 RG\n")
+        parts.append(
+            f"{x1 - tx * bar / 2:.3f} {y1 - ty * bar / 2:.3f} m "
+            f"{x1 + tx * bar / 2:.3f} {y1 + ty * bar / 2:.3f} l S\n"
+        )
 
-    parts.append("0.6 w 0 0 0 RG\n")
-    parts.append(circle(cx, cy, 4.0 / 25.4 * IN))
-    parts.append("0.4 w\n")
+    parts.append("0.7 w 0 0 0 RG\n")
+    parts.append(circle(cx, cy, hub))
+    parts.append("0.45 w\n")
     parts.append(f"{cx - 8:.2f} {cy:.2f} m {cx + 8:.2f} {cy:.2f} l S\n")
     parts.append(f"{cx:.2f} {cy - 8:.2f} m {cx:.2f} {cy + 8:.2f} l S\n")
 
-    for i in range(36):
-        ch = CHARS[i]
-        x1, y1 = polar(cx, cy, i, radius)
-        x0, y0 = polar(cx, cy, i, radius - (tick_ref if ch in REFS else tick))
-        if ch in REFS:
-            parts.append("1.2 w 0 0 0 RG\n")
-        else:
-            parts.append("0.6 w 0 0 0 RG\n")
-        parts.append(f"{x0:.3f} {y0:.3f} m {x1:.3f} {y1:.3f} l S\n")
-
-        gx0, gy0 = polar(cx, cy, i + 0.5, radius - 0.10 * IN)
-        gx1, gy1 = polar(cx, cy, i + 0.5, radius)
-        parts.append("0.3 w 0.6 0.6 0.6 RG\n")
-        parts.append(f"{gx0:.3f} {gy0:.3f} m {gx1:.3f} {gy1:.3f} l S\n")
-
     parts.append("0 0 0 rg 0 0 0 RG\n")
     for i, ch in enumerate(CHARS):
+        size = ref if ch in REFS else body
+        letter_r = radius + 0.10 * IN + size * 0.48
         x, y = polar(cx, cy, i, letter_r)
-        parts.append(text_at(x, y, ch, ref if ch in REFS else body))
+        parts.append(text_at(x, y, ch, size))
 
     parts.append("0 0 0 rg\n")
-    cap = f"{inches:g} in dial  -  36 marks x 10 deg  -  A at North  -  print at 100% (no fit-to-page)"
+    cap = (
+        f"{inches:g} in dial  -  36 marks x 10 deg  -  A at North  -  "
+        f"print at 100% (no fit-to-page)"
+    )
     cap_size = 8.0
     cap_w = len(cap) * cap_size * 0.42
+    south = radius + 0.10 * IN + ref * 0.95
     parts.append(
-        f"BT /F1 {cap_size:.1f} Tf {cx - cap_w / 2.0:.2f} {cy - radius - 22:.2f} Td "
+        f"BT /F1 {cap_size:.1f} Tf {cx - cap_w / 2.0:.2f} {cy - south - 18:.2f} Td "
         f"({pdf_escape(cap)}) Tj ET\n"
     )
-    note = "Cut on the outer circle. Align the 8 mm center mark with the bearing."
+    note = "Cut on the circle. Letters sit outside. Align the 8 mm center with the bearing."
     note_w = len(note) * 8.0 * 0.40
     parts.append(
-        f"BT /F1 8 Tf {cx - note_w / 2.0:.2f} {cy - radius - 34:.2f} Td "
+        f"BT /F1 8 Tf {cx - note_w / 2.0:.2f} {cy - south - 30:.2f} Td "
         f"({pdf_escape(note)}) Tj ET\n"
     )
     return "".join(parts)
@@ -150,13 +167,14 @@ def write_pdf(path: Path, stream: str, page_w: float, page_h: float) -> None:
 
 
 def make(inches: float) -> Path:
-    page = LETTER if inches <= 7.5 else TABLOID
+    # Letters sit outside the circle, so 8" and up need 11×17.
+    page = LETTER if inches <= 7 else TABLOID
     path = HERE / f"dial-{inches:g}in.pdf"
     write_pdf(path, build_stream(inches, *page), *page)
     return path
 
 
 if __name__ == "__main__":
-    for size in (6, 9, 10):
+    for size in (6, 7, 8, 9, 10):
         out = make(size)
         print(f"Wrote {out}")
