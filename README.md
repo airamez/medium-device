@@ -549,8 +549,19 @@ python host/capture.py --calibrate
 2. Wait until the live number **changes** before each tap. Sit on the tick, not past it.
 3. A tap that goes backward or lands on an earlier letter is rejected. If two taps are on the same angle, the previous two letters are redone once; if they are still close, that reading is saved.
 4. All 36 angles are written to `host/config.json`. Nothing is typed in this mode.
+   The previous `config.json` is copied first to `host/config-backups/config_YYYY_MM_DD_HH_MM.json`.
 
 Redo `--calibrate` if you remount the magnet, reprint the dial, or letters stay wrong after a normal session.
+
+List or put an old map back (no Nano needed):
+
+```bash
+python host/capture.py --restore              # list backups
+python host/capture.py --restore latest       # newest backup → config.json
+python host/capture.py --restore config_2026_08_16_21_56.json
+```
+
+`--restore` copies the current live file into `config-backups/` before overwriting it.
 
 ### Every session — no flags
 
@@ -562,7 +573,7 @@ Needs a finished `--calibrate` first.
 
 1. Point at **A** (top), tap. Then **J** (right), **S** (bottom), **1** (left).
 2. The live line shows `need 63°` (example) — wait until the number is near that saved mark, then tap. J and S at the same angle are refused.
-3. Tap **go**, then hold the needle on a letter. After about **1 second on the same letter**, it types.
+3. Tap **go**, then hold the needle on a letter. After about **1 second on the same letter**, it types. Hold in the **3.5° gap** between letters to type a space.
 
 ```text
  328.1° A    0.7s | HELLO
@@ -596,7 +607,8 @@ python host/capture.py --help
 | Flag | When to use | What happens |
 |------|-------------|--------------|
 | *(none)* | Daily typing | Loads the 36-letter map. Confirm **A, J, S, 1**. Types a character when that letter holds for `--delay` seconds. |
-| `--calibrate` | First time, or after hardware change | Walk **A–Z, 0–9**. Save every raw angle in `host/config.json`. Does **not** type. |
+| `--calibrate` | First time, or after hardware change | Walk **A–Z, 0–9**. Save every raw angle in `host/config.json`. Copies the old file to `host/config-backups/` first. Does **not** type. |
+| `--restore` | Undo a calibrate | List backups, or copy one back over `config.json`. No USB needed. `latest` = newest. |
 | `--debug` | Line up the base | Live angle only. Rotate the **base** (needle on A) until A is where you want north. Ctrl+C to stop. |
 | `--diagnostic` | Letters are off | Confirm A, J, S, 1. Point at a printed letter, **Enter**, type that letter, Enter. Repeat. Ctrl+C writes a summary to `logs/Diagnostic_*.log` (raw angle, saved map, predicted letter, error). |
 | `--all` | Check the firmware | Print **every** raw `a=…` sample. No letters. |
@@ -617,6 +629,7 @@ python host/capture.py --help
 | `--delay` | `1.0` (saved as `delay_s`) | Seconds the **same letter** must stay on screen before it types. Analog jitter is fine; changing letter resets the timer. |
 | `--wrap` | `60` (saved as `wrap_cols`) | New line after this many characters. |
 | `--invert` | off | Force reverse direction. Normally taken from `--calibrate`. |
+| `--sound` | off | Speak each typed letter or “space”. Uses **espeak-ng** (Arch: `sudo pacman -S espeak-ng`) or the `pyttsx3` library (`pip install pyttsx3`). Offline, no account. |
 | `--log-dir` | `logs/` at the repo root | Where `Session_*.txt` / `Session_*.log` go. |
 
 `--delay` and `--wrap` are stored in `host/config.json`. They do **not** overwrite the 36 letter marks.
@@ -638,18 +651,21 @@ python host/capture.py --help
 --calibrate     save A=327.4, B=338.1, … 9=317.4
 python capture  measure A, J, S, 1
                 stretch the saved 36 marks onto those four
-                letter = nearest saved mark
-                type when that letter holds ~1 s
+                letter = nearest saved mark, or space in the 3.5° gaps
+                type when that letter (or space) holds ~1 s
 ```
 
 ### Examples
 
 ```bash
 python host/capture.py --help
-python host/capture.py --calibrate       # once: save all 36 letters
+python host/capture.py --calibrate       # once: save all 36 letters (backs up the old file)
+python host/capture.py --restore         # list saved maps
+python host/capture.py --restore latest  # put the previous map back
 python host/capture.py                   # daily: A J S 1, then type
 python host/capture.py --debug           # raw angle; rotate the base
 python host/capture.py --diagnostic      # Enter + true letter → Diagnostic_*.log
+python host/capture.py --sound           # speak each letter
 python host/capture.py --delay 1.5       # hold a bit longer before it types
 python host/capture.py --wrap 40
 python host/capture.py --port /dev/ttyUSB0

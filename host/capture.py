@@ -18,7 +18,10 @@ import argparse
 import glob
 import json
 import math
+import shutil
+import subprocess
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,10 +42,11 @@ CAL_REFS = ("A", "J", "S", "1")
 CARDINAL_MIN_SEP_DEG = 25.0  # A/J/S/1 are ~90°; 31.5 and 31.4 is the same tap
 CARDINAL_SAVED_TOL_DEG = 30.0  # session tap vs A-shifted saved mark
 COMPASS_STEP_TOL_DEG = 20.0
-# Each 10° sector: 6° letter in the middle, 2° space on each side (4° gap).
-LETTER_DEG = 6.0
-HALF_LETTER_DEG = LETTER_DEG / 2.0  # ±3° from sticker center
-GAP_SIDE_DEG = 2.0
+# ~10° per mark: letter in the middle, 3.5° space between letter edges.
+GAP_BETWEEN_DEG = 3.5
+LETTER_DEG = SECTOR_DEG - GAP_BETWEEN_DEG  # 6.5°
+HALF_LETTER_DEG = LETTER_DEG / 2.0
+GAP_SIDE_DEG = GAP_BETWEEN_DEG / 2.0
 DEFAULT_DELAY_S = 1.0
 DEFAULT_WRAP_COLS = 60
 DEFAULT_STILL_TOL_DEG = 2.0  # parked if the live angle stays within this of the lock
@@ -51,6 +55,10 @@ CAL_REWIND = 2  # on a too-close tap, recapture this many previous letters as we
 STILL_SAMPLES = 4  # same letter this many times = stopped
 SPACE_STILL_SAMPLES = 25  # gaps need a real pause; skip letter-to-letter transit
 CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
+
+
+def backup_dir() -> Path:
+    return CONFIG_PATH.parent / "config-backups"
 
 
 def guess_port() -> str | None:
@@ -304,6 +312,74 @@ def save_config(
     CONFIG_PATH.write_text(json.dumps(payload, indent=2) + "\n")
 
 
+def list_config_backups() -> list[Path]:
+    folder = backup_dir()
+    if not folder.is_dir():
+        return []
+    return sorted(folder.glob("config_*.json"))
+
+
+def backup_config() -> Path | None:
+    """Copy the current config.json aside. None if there is nothing to save."""
+    if not CONFIG_PATH.exists() or CONFIG_PATH.stat().st_size == 0:
+        return None
+    folder = backup_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y_%m_%d_%H_%M")
+    dest = folder / f"config_{stamp}.json"
+    n = 2
+    while dest.exists():
+        dest = folder / f"config_{stamp}_{n}.json"
+        n += 1
+    dest.write_bytes(CONFIG_PATH.read_bytes())
+    return dest
+
+
+def restore_config(name: str) -> Path:
+    """Copy a backup over config.json. `name` is a file, stem, or 'latest'."""
+    backups = list_config_backups()
+    if not backups:
+        raise FileNotFoundError("No backups in " + str(backup_dir()))
+    if name in ("latest", "last"):
+        src = backups[-1]
+    else:
+        key = Path(name).name
+        src = None
+        for item in backups:
+            if item.name == key or item.stem == key or item.name == key + ".json":
+                src = item
+                break
+        if src is None:
+            raise FileNotFoundError(f"No backup named {name}")
+    backup_config()
+    CONFIG_PATH.write_bytes(src.read_bytes())
+    return src
+
+
+def cmd_restore(name: str) -> int:
+    """List or restore a --calibrate backup. Does not need the Nano."""
+    if name in ("list", ""):
+        backups = list_config_backups()
+        if not backups:
+            print(f"No backups in {backup_dir()}")
+            return 1
+        print(f"Backups in {backup_dir()}:")
+        for item in backups:
+            print(f"  {item.name}")
+        print("\nRestore one:")
+        print(f"  python capture.py --restore latest")
+        print(f"  python capture.py --restore {backups[-1].name}")
+        return 0
+    try:
+        src = restore_config(name)
+    except FileNotFoundError as exc:
+        print(exc)
+        return 1
+    print(f"Restored {src.name} → {CONFIG_PATH.name}")
+    print("The previous live file was copied into config-backups/ first.")
+    return 0
+
+
 def detect_invert(points: list[dict]) -> bool:
     """True if raw angles decrease while letters go A → B → C."""
     if len(points) < 2:
@@ -456,6 +532,34 @@ def nearest_cal_char(angle: float, points: list[dict]) -> str:
     if not points:
         return "?"
     return min(points, key=lambda p: circular_delta(p["angle"], angle))["char"]
+
+
+def cal_char_or_space(
+    angle: float, points: list[dict], gap_deg: float = GAP_BETWEEN_DEG
+) -> str:
+    """Nearest saved mark, or space if the needle sits in the 3–4° gap."""
+    if not points:
+        return "?"
+    by = {p["char"]: p for p in points}
+    ordered = [by[ch] for ch in CHARS if ch in by]
+    if len(ordered) < 2:
+        return nearest_cal_char(angle, points)
+    n = len(ordered)
+    i = min(range(n), key=lambda k: circular_delta(ordered[k]["angle"], angle))
+    nearest = ordered[i]
+    prev = ordered[(i - 1) % n]
+    nxt = ordered[(i + 1) % n]
+    d_near = circular_delta(nearest["angle"], angle)
+    toward_prev = circular_delta(angle, prev["angle"])
+    toward_next = circular_delta(angle, nxt["angle"])
+    span = circular_delta(
+        nearest["angle"],
+        prev["angle"] if toward_prev < toward_next else nxt["angle"],
+    )
+    half = max(0.2, (span - gap_deg) / 2.0)
+    if d_near <= half:
+        return nearest["char"]
+    return " "
 
 
 def monotonic_cal_points(
@@ -817,17 +921,18 @@ def invert_from_clockwise_move(a_angle: float, toward_b: float) -> bool:
 
 
 def match_char(angle: float, a_offset: float, invert: bool = False) -> str:
-    """Map a sensor angle to A–Z / 0–9 on the printed 10° dial.
-
-    A is a_offset. Each next letter is 10° around the paper.
-    invert=True if the chip counts opposite to the printed clockwise ring.
-    """
-    return CHARS[nearest_letter_idx(offset_to_dial(angle, a_offset, invert))]
+    """Map a sensor angle to A–Z / 0–9, or space in the gap."""
+    return dial_to_char(offset_to_dial(angle, a_offset, invert))
 
 
-def dial_to_char(dial: float) -> str:
-    """Nearest of the 36 printed marks (10° each). No spaces."""
-    return CHARS[nearest_letter_idx(dial)]
+def dial_to_char(dial: float, gap_deg: float = GAP_BETWEEN_DEG) -> str:
+    """Letter if inside the 6.5° window around a 10° center, else space."""
+    idx = nearest_letter_idx(dial)
+    center = idx * SECTOR_DEG
+    half = (SECTOR_DEG - gap_deg) / 2.0
+    if abs(signed_from_center(center, dial)) <= half:
+        return CHARS[idx]
+    return " "
 
 
 def session_a_offset(points: list[dict], fallback: float = 0.0) -> float:
@@ -840,9 +945,9 @@ def live_char(
     invert: bool,
     offset: float = 0.0,
 ) -> str:
-    """What typing uses: nearest saved mark (already aligned to this session)."""
+    """What typing uses: aligned saved mark, or space in the gap."""
     if len(points) >= 2:
-        return nearest_cal_char(angle, points)
+        return cal_char_or_space(angle, points)
     return match_char(angle, session_a_offset(points, offset), invert)
 
 
@@ -862,6 +967,88 @@ def angle_to_char(
 
 def log_glyph(char: str) -> str:
     return "SP" if char == " " else char
+
+
+_SPEAK_WORDS = {
+    " ": "space",
+    "0": "zero",
+    "1": "one",
+    "2": "two",
+    "3": "three",
+    "4": "four",
+    "5": "five",
+    "6": "six",
+    "7": "seven",
+    "8": "eight",
+    "9": "nine",
+}
+_speak_lock = threading.Lock()
+_speak_engine = None
+_speak_warned = False
+
+
+def speak_word(char: str) -> str:
+    return _SPEAK_WORDS.get(char, char)
+
+
+def _espeak_cmd() -> list[str] | None:
+    for name in ("espeak-ng", "espeak", "spd-say"):
+        path = shutil.which(name)
+        if path:
+            if name == "spd-say":
+                return [path, "-w"]
+            return [path, "-s", "170"]
+    return None
+
+
+def _speak_blocking(word: str) -> None:
+    global _speak_engine, _speak_warned
+    try:
+        import pyttsx3
+
+        if _speak_engine is None:
+            _speak_engine = pyttsx3.init()
+            _speak_engine.setProperty("rate", 170)
+        _speak_engine.say(word)
+        _speak_engine.runAndWait()
+        return
+    except Exception:
+        pass
+    cmd = _espeak_cmd()
+    if cmd:
+        try:
+            subprocess.run(
+                cmd + [word],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+            return
+        except (OSError, subprocess.SubprocessError):
+            pass
+    if not _speak_warned:
+        _speak_warned = True
+        print(
+            "\nNo speech engine. Arch:  sudo pacman -S espeak-ng\n"
+            "or:  pip install pyttsx3\n",
+            flush=True,
+        )
+
+
+def speak_glyph(char: str) -> None:
+    """Say the typed character in a background thread (does not block serial)."""
+    word = speak_word(char)
+    if not _speak_lock.acquire(blocking=False):
+        return
+
+    def run() -> None:
+        try:
+            _speak_blocking(word)
+        finally:
+            _speak_lock.release()
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 def allow_emit(char: str, typed: list[str]) -> bool:
@@ -1188,8 +1375,12 @@ def cmd_calibrate(ser: serial.Serial, force_invert: bool) -> int:
         i += 1
 
     invert = True if force_invert else detect_invert(points)
+    bak = backup_config()
     save_config(points, invert)
     print(f"\nSaved {len(points)} marks in {CONFIG_PATH.name}  invert={invert}")
+    if bak:
+        print(f"Previous settings kept as {bak.parent.name}/{bak.name}")
+        print("Restore:  python capture.py --restore latest")
     for sp in cal_spans(ordered_refs(points), invert):
         note = ""
         if abs(sp["raw_span"] - 90.0) > 15.0:
@@ -1299,6 +1490,7 @@ def cmd_letters(
     invert: bool,
     log_dir: Path,
     wrap_cols: int | None = None,
+    sound: bool = False,
 ) -> int:
     del move_deg
     cfg = load_config()
@@ -1376,9 +1568,11 @@ def cmd_letters(
     log_path.write_text(header)
 
     print(f"Logging {txt_name} / {log_name}")
+    extra = " Speech on." if sound else ""
     print(
-        f"Hold the needle on one letter for {delay_s:.1f}s to type. "
-        f"Wrap at {wrap_cols}.\n"
+        f"Hold the needle on one letter for {delay_s:.1f}s to type "
+        f"(space in the {GAP_BETWEEN_DEG:.1f}° gaps). "
+        f"Wrap at {wrap_cols}.{extra}\n"
     )
 
     hold = LetterHold(delay_s)
@@ -1436,6 +1630,8 @@ def cmd_letters(
             typed.append(char)
             show(angle, char, hold.held_s(now), armed=True)
             write_out(char, int_deg(angle), char)
+            if sound:
+                speak_glyph(char)
             last_emitted = char
             must_leave = True
             hold.clear()
@@ -1710,6 +1906,21 @@ def main() -> int:
         help="Force reverse direction (normally taken from the saved --calibrate map)",
     )
     parser.add_argument(
+        "--sound",
+        action="store_true",
+        help="Speak each typed letter (espeak-ng or pyttsx3; offline)",
+    )
+    parser.add_argument(
+        "--restore",
+        nargs="?",
+        const="list",
+        metavar="FILE",
+        help=(
+            "Restore a config backup from config-backups/ "
+            "(no name lists them; 'latest' is newest). No Nano needed."
+        ),
+    )
+    parser.add_argument(
         "--stream",
         action="store_true",
         help="Raw angle stream instead of letters",
@@ -1720,6 +1931,9 @@ def main() -> int:
         default=Path(__file__).resolve().parent.parent / "logs",
     )
     args = parser.parse_args()
+
+    if args.restore is not None:
+        return cmd_restore(args.restore)
 
     port = args.port or guess_port()
     if not port:
@@ -1752,6 +1966,7 @@ def main() -> int:
             args.invert,
             args.log_dir,
             wrap_cols=args.wrap_cols,
+            sound=args.sound,
         )
     finally:
         ser.close()

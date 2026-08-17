@@ -18,10 +18,12 @@ class DialToCharTests(unittest.TestCase):
         for i, ch in enumerate(c.CHARS):
             self.assertEqual(c.dial_to_char(i * 10.0), ch)
 
-    def test_nearest_letter_no_spaces(self):
+    def test_letter_window_and_gap(self):
+        self.assertEqual(c.dial_to_char(0.0), "A")
         self.assertEqual(c.dial_to_char(2.9), "A")
-        self.assertEqual(c.dial_to_char(4.9), "A")
-        self.assertEqual(c.dial_to_char(5.0), "B")
+        self.assertEqual(c.dial_to_char(3.2), "A")
+        self.assertEqual(c.dial_to_char(4.9), " ")
+        self.assertEqual(c.dial_to_char(5.0), " ")
         self.assertEqual(c.dial_to_char(7.0), "B")
         self.assertEqual(c.dial_to_char(357.0), "A")
 
@@ -52,6 +54,22 @@ class IntDegTests(unittest.TestCase):
         self.assertTrue(c.still_on_angle(11.0, 10.9, 2.0))
         self.assertTrue(c.still_on_angle(359.8, 0.3, 2.0))
         self.assertFalse(c.still_on_angle(10.0, 20.0, 2.0))
+
+
+class SpaceGapTests(unittest.TestCase):
+    def test_even_ten_degree_ring(self):
+        points = [c.make_point(ch, i * 10.0) for i, ch in enumerate(c.CHARS)]
+        self.assertEqual(c.cal_char_or_space(0.0, points), "A")
+        self.assertEqual(c.cal_char_or_space(3.0, points), "A")
+        self.assertEqual(c.cal_char_or_space(5.0, points), " ")
+        self.assertEqual(c.cal_char_or_space(10.0, points), "B")
+        self.assertEqual(c.live_char(5.0, points, False), " ")
+
+    def test_speak_words(self):
+        self.assertEqual(c.speak_word("A"), "A")
+        self.assertEqual(c.speak_word(" "), "space")
+        self.assertEqual(c.speak_word("0"), "zero")
+        self.assertEqual(c.speak_word("8"), "eight")
 
 
 class CardinalConfirmTests(unittest.TestCase):
@@ -169,9 +187,9 @@ class InterpolationTests(unittest.TestCase):
         self.assertAlmostEqual(c.raw_to_dial(40.0, self.points, False), 30.0, places=6)
         self.assertEqual(c.angle_to_char(40.0, points=self.points), "D")
 
-    def test_midway_is_nearest_letter(self):
-        # Dial 5° is the A–B boundary. Raw = dial + 10 = 15°.
-        self.assertEqual(c.angle_to_char(15.0, points=self.points), "B")
+    def test_midway_is_space(self):
+        # Dial 5° is the A–B gap. Raw = dial + 10 = 15°.
+        self.assertEqual(c.angle_to_char(15.0, points=self.points), " ")
 
     def test_wrap_from_zero_to_a(self):
         # 0 is dial 260 / raw 270; A is dial 0 / raw 10.
@@ -355,6 +373,24 @@ class DelayConfigTests(unittest.TestCase):
         self.assertEqual([p["char"] for p in loaded], list(c.CHARS))
         self.assertTrue(c.is_full_cal(loaded))
         self.assertFalse(c.is_full_cal(pts(("A", 0), ("J", 90))))
+
+    def test_backup_none_when_missing(self):
+        self.assertIsNone(c.backup_config())
+
+    def test_backup_and_restore_latest(self):
+        first = pts(("A", 10.0), ("J", 100.0))
+        c.save_config(first, invert=False)
+        bak = c.backup_config()
+        self.assertIsNotNone(bak)
+        self.assertTrue(bak.exists())
+        self.assertIn("config_", bak.name)
+        second = pts(("A", 20.0), ("J", 110.0))
+        c.save_config(second, invert=True)
+        src = c.restore_config("latest")
+        self.assertEqual(src, bak)
+        cfg = c.load_config()
+        self.assertAlmostEqual(cfg["points"][0]["angle"], 10.0)
+        self.assertFalse(cfg["invert"])
 
 
 class MonotonicCalTests(unittest.TestCase):
@@ -569,7 +605,7 @@ class FitOffsetTests(unittest.TestCase):
         self.assertEqual(c.angle_to_char(310.0, offset=offset, invert=invert), "Y")
         self.assertEqual(c.angle_to_char(70.0, offset=offset, invert=invert), "A")
         self.assertEqual(c.angle_to_char(80.0, offset=offset, invert=invert), "B")
-        self.assertIn(c.angle_to_char(75.0, offset=offset, invert=invert), ("A", "B"))
+        self.assertEqual(c.angle_to_char(75.0, offset=offset, invert=invert), " ")
 
     def test_printed_ten_degree_grid_from_a_only(self):
         # Perfect paper: A at 70.3°, then every 10° clockwise.
@@ -595,8 +631,8 @@ class FitOffsetTests(unittest.TestCase):
 
     def test_six_degree_letter_two_degree_shoulders(self):
         self.assertEqual(c.angle_to_char(70.0, offset=70.0), "A")
-        self.assertEqual(c.angle_to_char(74.0, offset=70.0), "A")
-        self.assertEqual(c.angle_to_char(75.0, offset=70.0), "B")
+        self.assertEqual(c.angle_to_char(73.0, offset=70.0), "A")
+        self.assertEqual(c.angle_to_char(75.0, offset=70.0), " ")
         self.assertEqual(c.angle_to_char(77.0, offset=70.0), "B")
 
 
@@ -622,7 +658,7 @@ class CompassAutoTests(unittest.TestCase):
     def test_interpolated_between_refs(self):
         # B is 10°, between A (0°) and E (40°).
         self.assertEqual(c.angle_to_char(10.0, points=self.points), "B")
-        self.assertEqual(c.angle_to_char(5.0, points=self.points), "B")
+        self.assertEqual(c.angle_to_char(5.0, points=self.points), " ")
 
 
 class AllowEmitTests(unittest.TestCase):
@@ -641,8 +677,8 @@ class OffsetFallbackTests(unittest.TestCase):
     def test_offset_treats_a_as_center(self):
         # No multi-point list: offset is the A sticker center.
         self.assertEqual(c.angle_to_char(100.0, offset=100.0), "A")
-        self.assertEqual(c.angle_to_char(104.0, offset=100.0), "A")
-        self.assertEqual(c.angle_to_char(105.0, offset=100.0), "B")
+        self.assertEqual(c.angle_to_char(103.0, offset=100.0), "A")
+        self.assertEqual(c.angle_to_char(105.0, offset=100.0), " ")
         self.assertEqual(c.angle_to_char(110.0, offset=100.0), "B")
 
 
@@ -658,15 +694,23 @@ class LiveMapperFromDiagnosticTests(unittest.TestCase):
         self.points = pts(("A", self.a), ("J", 210.483), ("S", 355.117), ("1", 52.533))
 
     def test_a_only_matches_what_they_pointed_at(self):
-        self.assertEqual(c.match_char(166.133, self.a, False), "A")
-        self.assertEqual(c.match_char(188.800, self.a, False), "D")
+        # 166.1 is 3.5° past A — that is the 3.5° gap now, not A.
+        self.assertEqual(c.match_char(166.133, self.a, False), " ")
+        self.assertEqual(c.match_char(self.a, self.a, False), "A")
         self.assertEqual(c.match_char(201.775, self.a, False), "E")
         self.assertEqual(c.match_char(212.617, self.a, False), "F")
 
     def test_piecewise_is_what_made_every_letter_run_ahead(self):
-        self.assertEqual(c.angle_to_char(166.133, invert=False, points=self.points), "B")
-        self.assertEqual(c.angle_to_char(188.800, invert=False, points=self.points), "F")
-        self.assertEqual(c.angle_to_char(201.775, invert=False, points=self.points), "H")
+        # Same session: interpolation shoved mid-arc samples into the next letter
+        # or, with gaps, into space. The J-as-F mark is the root warp.
+        self.assertIn(
+            c.angle_to_char(166.133, invert=False, points=self.points),
+            (" ", "B"),
+        )
+        self.assertIn(
+            c.angle_to_char(188.800, invert=False, points=self.points),
+            (" ", "F"),
+        )
 
     def test_j_mark_was_around_f_not_east(self):
         # 210 − 163 ≈ 47°. F is 50° from A. J should be 90°.
