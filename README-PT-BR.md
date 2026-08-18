@@ -79,17 +79,31 @@ Os códigos dos itens coincidem com a [lista de peças](#peças): **E** é eletr
 
 O ímã precisa ser um disco **diametral** (os polos ficam em lados opostos da face, não nas duas faces planas). Ele fica na **ponta de baixo** do eixo, 1–3 mm acima do chip preto do AS5600. O eixo passa só pelo rolamento, não pelo ímã.
 
-Os discos impressos (imprima em 100%, sem ajustar à página) estão em `docs/`: `dial-6in.pdf` até `dial-10in.pdf`. **A** fica no norte. As letras seguem no sentido horário, A–Z e depois 0–9. Os raios saem do centro; as letras ficam **fora** do círculo de corte. 6" e 7" cabem em papel carta (letter); 8", 9" e 10" cabem em tabloide (11×17).
+Os discos impressos (imprima em 100%, sem ajustar à página) estão em `docs/base-templates/`. Os tamanhos vão de 6" a 10". **A** fica no norte. As letras seguem no sentido horário, A–Z e depois 0–9. As letras ficam **fora** do círculo de corte. 6" e 7" cabem em papel carta (letter); 8", 9" e 10" cabem em tabloide (11×17).
+
+Cada tamanho tem vários layouts (os nomes abaixo são os arquivos de 6"):
+
+| Arquivo | Layout |
+|------|--------|
+| `dial-6in.pdf` | Raios do centro até cada caractere |
+| `dial-6in-nolines.pdf` | Só as letras, sem raios |
+| `dial-6in-big.pdf` | Letras maiores, com raios |
+| `dial-6in-big-nolines.pdf` | Letras maiores, sem raios |
+| `dial-6in-box.pdf` | Um quadradinho **logo antes** de cada caractere — aponte a agulha para dentro da caixa |
+| `dial-6in-big-box.pdf` | Letras maiores com as caixas de mira |
+
+Os arquivos `-box` são os mais fáceis de apontar: a caixa fica na borda, alinhada com a letra, para você ver quando o ponteiro está nesse caractere.
 
 ### Organização do repositório
 
 ```
 medium-device/
   README.md
-  docs/            diagramas, fotos, discos para imprimir
-  firmware/        sketches Arduino (abra estes somente no Arduino IDE)
-  host/            programa Python de captura
-  logs/            criado em tempo de execução
+  docs/                diagramas, fotos
+  docs/base-templates/ discos para imprimir (6–10 in, vários layouts)
+  firmware/            sketches Arduino (abra estes somente no Arduino IDE)
+  host/                programa Python de captura
+  logs/                criado em tempo de execução
 ```
 
 ---
@@ -657,7 +671,7 @@ Você precisa do rolamento, do eixo, da balsa, do círculo de madeira, da cola e
 2. Encaixe **M01** no centro de **M04**. Passe **M02** por **M01** (eixo só pelo rolamento).
 3. Cole **E03** com **M05a** na **ponta de baixo** de M02, centralizado. Folga até o chip do E01: **1–3 mm**.
 4. Cole **M03** no **topo** de M02. Coloque **M05b** (parafuso e porca) na extremidade curta; acrescente ou tire porcas até a agulha ficar parada em qualquer ângulo.
-5. Marque **A–Z** e depois **0–9** a cada **10°** em M04 (36 setores), ou imprima um dos discos em `docs/`. A agulha não pode raspar a face.
+5. Marque **A–Z** e depois **0–9** a cada **10°** em M04 (36 setores), ou imprima um dos discos em `docs/base-templates/`. A agulha não pode raspar a face.
 6. Reconecte o USB e confirme que o ângulo ainda muda quando a agulha gira.
 
 ---

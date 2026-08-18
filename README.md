@@ -81,17 +81,31 @@ Item codes match the [parts list](#parts): **E** is electronics, **M** is mechan
 
 The magnet must be a **diametric** disc (the poles sit on opposite sides of the face, not on the two flat faces). It lives on the **bottom tip** of the shaft, 1–3 mm above the black chip on the AS5600. The shaft goes through the bearing only, not through the magnet.
 
-Printed dials (print at 100%, no fit-to-page) are in `docs/`: `dial-6in.pdf` through `dial-10in.pdf`. **A** is at north. Letters run clockwise, A–Z then 0–9. Spokes come from the center; the letters sit **outside** the cut circle. 6" and 7" are letter size; 8", 9", and 10" are tabloid (11×17).
+Printed dials (print at 100%, no fit-to-page) are in `docs/base-templates/`. Sizes run from 6" to 10". **A** is at north. Letters run clockwise, A–Z then 0–9. The letters sit **outside** the cut circle. 6" and 7" are letter size; 8", 9", and 10" are tabloid (11×17).
+
+Each size has several layouts (example names are the 6" files):
+
+| File | Layout |
+|------|--------|
+| `dial-6in.pdf` | Spokes from the center to each character |
+| `dial-6in-nolines.pdf` | Letters only, no spokes |
+| `dial-6in-big.pdf` | Larger letters, with spokes |
+| `dial-6in-big-nolines.pdf` | Larger letters, no spokes |
+| `dial-6in-box.pdf` | A small box just **before** each character — point the needle into the box |
+| `dial-6in-big-box.pdf` | Larger letters plus aiming boxes |
+
+The `-box` files are the easiest to aim: the box sits on the rim, in line with the letter, so you can see when the pointer is on that character.
 
 ### Repository layout
 
 ```
 medium-device/
   README.md
-  docs/            diagrams, photos, printable dials
-  firmware/        Arduino sketches (open these in Arduino IDE only)
-  host/            Python capture program
-  logs/            created at runtime
+  docs/                diagrams, photos
+  docs/base-templates/ printable dials (6–10 in, several layouts)
+  firmware/            Arduino sketches (open these in Arduino IDE only)
+  host/                Python capture program
+  logs/                created at runtime
 ```
 
 ---
@@ -659,7 +673,7 @@ You need the bearing, shaft, balsa, wood circle, glue, and the small screw-and-n
 2. Fit **M01** in the center of **M04**. Put **M02** through **M01** (shaft through the bearing only).
 3. Glue **E03** with **M05a** on the **bottom tip** of M02, centered. Gap to the E01 chip: **1–3 mm**.
 4. Glue **M03** on the **top** of M02. Put **M05b** (screw and nut) on the short end; add or remove nuts until the needle stays put at any angle.
-5. Mark **A–Z** then **0–9** every **10°** on M04 (36 sectors), or print one of the dials in `docs/`. The needle must not scrape the face.
+5. Mark **A–Z** then **0–9** every **10°** on M04 (36 sectors), or print one of the dials in `docs/base-templates/`. The needle must not scrape the face.
 6. Reconnect USB and confirm the angle still changes when the needle turns.
 
 ---

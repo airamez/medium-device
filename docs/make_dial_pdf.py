@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Write print-at-100% letter dials (A–Z, 0–9 every 10°)."""
+"""Write print-at-100% letter dials (A–Z, 0–9 every 10°) into base-templates/."""
 
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+OUT = HERE / "base-templates"
 IN = 72.0
 LETTER = (612.0, 792.0)  # 8.5 x 11
 TABLOID = (792.0, 1224.0)  # 11 x 17
@@ -21,6 +23,27 @@ H_BOLD = {
     "5": 556, "6": 556, "7": 556, "8": 556, "9": 556,
 }
 REFS = set("AEJNSW15")
+
+
+@dataclass(frozen=True)
+class Style:
+    """One printable layout. suffix is appended to dial-{n}in."""
+
+    suffix: str
+    caption: str
+    big: bool
+    spokes: bool
+    box: bool
+
+
+STYLES = (
+    Style("", "spokes", False, True, False),
+    Style("-nolines", "no spokes", False, False, False),
+    Style("-big", "big letters, spokes", True, True, False),
+    Style("-big-nolines", "big letters, no spokes", True, False, False),
+    Style("-box", "aiming boxes", False, True, True),
+    Style("-big-box", "big letters, aiming boxes", True, True, True),
+)
 
 
 def pdf_escape(s: str) -> str:
@@ -63,15 +86,53 @@ def radial_unit(i: float) -> tuple[float, float]:
     return math.cos(std), math.sin(std)
 
 
-def build_stream(inches: float, page_w: float, page_h: float) -> str:
+def stroke_rect(
+    cx: float,
+    cy: float,
+    ux: float,
+    uy: float,
+    tx: float,
+    ty: float,
+    half_rad: float,
+    half_tan: float,
+) -> str:
+    """Axis-aligned to the radial/tangential frame, not the page."""
+    corners = []
+    for sr, st in ((1.0, 1.0), (1.0, -1.0), (-1.0, -1.0), (-1.0, 1.0)):
+        corners.append(
+            (
+                cx + ux * half_rad * sr + tx * half_tan * st,
+                cy + uy * half_rad * sr + ty * half_tan * st,
+            )
+        )
+    x0, y0 = corners[0]
+    parts = [f"{x0:.3f} {y0:.3f} m"]
+    for x, y in corners[1:]:
+        parts.append(f"{x:.3f} {y:.3f} l")
+    parts.append("h S")
+    return " ".join(parts) + "\n"
+
+
+def letter_sizes(inches: float, big: bool) -> tuple[float, float]:
+    scale = inches / 7.0
+    if big:
+        cap = min(scale, 1.25)
+        return 22.0 * cap, 26.0 * cap
+    cap = min(scale, 1.15)
+    return 13.0 * cap, 15.0 * cap
+
+
+def build_stream(inches: float, page_w: float, page_h: float, style: Style) -> str:
     radius = inches * IN / 2.0
     # Leave room under the south letters for the caption.
-    cy_shift = 28.0 if inches <= 7 else 36.0
+    extra = 10.0 if style.big else 0.0
+    cy_shift = (28.0 if inches <= 7 else 36.0) + extra
     cx, cy = page_w / 2.0, page_h / 2.0 + cy_shift
-    scale = inches / 7.0
-    body = 13.0 * min(scale, 1.15)
-    ref = 15.0 * min(scale, 1.15)
+    body, ref = letter_sizes(inches, style.big)
     hub = 4.0 / 25.4 * IN
+    # Square just inside the cut circle, on the wood, right before the letter.
+    box_side = (0.20 if style.big else 0.16) * IN
+    box_center_r = radius - box_side / 2.0 - 0.4
 
     parts: list[str] = []
     parts.append("1.4 w 0 0 0 RG\n")
@@ -82,19 +143,33 @@ def build_stream(inches: float, page_w: float, page_h: float) -> str:
         bar = glyph_width(ch, size)
         ux, uy = radial_unit(i)
         tx, ty = -uy, ux
-        # End just outside the cut circle, immediately before the letter.
-        end_r = radius + 0.05 * IN
-        x1, y1 = cx + ux * end_r, cy + uy * end_r
-        if ch in REFS:
-            parts.append("1.1 w 0 0 0 RG\n")
-        else:
-            parts.append("0.55 w 0 0 0 RG\n")
-        parts.append(f"{cx:.3f} {cy:.3f} m {x1:.3f} {y1:.3f} l S\n")
-        parts.append("1.05 w 0 0 0 RG\n")
-        parts.append(
-            f"{x1 - tx * bar / 2:.3f} {y1 - ty * bar / 2:.3f} m "
-            f"{x1 + tx * bar / 2:.3f} {y1 + ty * bar / 2:.3f} l S\n"
-        )
+        if style.spokes:
+            if style.box:
+                end_r = box_center_r - box_side / 2.0
+            else:
+                # End just outside the cut circle, immediately before the letter.
+                end_r = radius + 0.05 * IN
+            if ch in REFS:
+                parts.append("1.1 w 0 0 0 RG\n")
+            else:
+                parts.append("0.55 w 0 0 0 RG\n")
+            parts.append(f"{cx:.3f} {cy:.3f} m {cx + ux * end_r:.3f} {cy + uy * end_r:.3f} l S\n")
+            if not style.box:
+                parts.append("1.05 w 0 0 0 RG\n")
+                x1, y1 = cx + ux * end_r, cy + uy * end_r
+                parts.append(
+                    f"{x1 - tx * bar / 2:.3f} {y1 - ty * bar / 2:.3f} m "
+                    f"{x1 + tx * bar / 2:.3f} {y1 + ty * bar / 2:.3f} l S\n"
+                )
+        if style.box:
+            bx, by = cx + ux * box_center_r, cy + uy * box_center_r
+            parts.append("1.25 w 0 0 0 RG 1 1 1 rg\n")
+            parts.append(
+                stroke_rect(
+                    bx, by, ux, uy, tx, ty, box_side / 2.0, box_side / 2.0
+                ).replace("h S", "h B")
+            )
+            parts.append("0 0 0 RG 0 0 0 rg\n")
 
     parts.append("0.7 w 0 0 0 RG\n")
     parts.append(circle(cx, cy, hub))
@@ -106,13 +181,16 @@ def build_stream(inches: float, page_w: float, page_h: float) -> str:
     for i, ch in enumerate(CHARS):
         size = ref if ch in REFS else body
         letter_r = radius + 0.10 * IN + size * 0.48
+        if style.box:
+            # Keep the glyph clear of the aiming box on the rim.
+            letter_r = max(letter_r, radius + 0.08 * IN + size * 0.55)
         x, y = polar(cx, cy, i, letter_r)
         parts.append(text_at(x, y, ch, size))
 
     parts.append("0 0 0 rg\n")
     cap = (
-        f"{inches:g} in dial  -  36 marks x 10 deg  -  A at North  -  "
-        f"print at 100% (no fit-to-page)"
+        f"{inches:g} in dial  -  {style.caption}  -  36 marks x 10 deg  -  "
+        f"A at North  -  print at 100% (no fit-to-page)"
     )
     cap_size = 8.0
     cap_w = len(cap) * cap_size * 0.42
@@ -122,6 +200,11 @@ def build_stream(inches: float, page_w: float, page_h: float) -> str:
         f"({pdf_escape(cap)}) Tj ET\n"
     )
     note = "Cut on the circle. Letters sit outside. Align the 8 mm center with the bearing."
+    if style.box:
+        note = (
+            "Cut on the circle. Aim the needle into the small box before each letter. "
+            "Align the 8 mm center with the bearing."
+        )
     note_w = len(note) * 8.0 * 0.40
     parts.append(
         f"BT /F1 8 Tf {cx - note_w / 2.0:.2f} {cy - south - 30:.2f} Td "
@@ -166,15 +249,17 @@ def write_pdf(path: Path, stream: str, page_w: float, page_h: float) -> None:
     path.write_bytes(out)
 
 
-def make(inches: float) -> Path:
+def make(inches: float, style: Style) -> Path:
     # Letters sit outside the circle, so 8" and up need 11×17.
     page = LETTER if inches <= 7 else TABLOID
-    path = HERE / f"dial-{inches:g}in.pdf"
-    write_pdf(path, build_stream(inches, *page), *page)
+    OUT.mkdir(parents=True, exist_ok=True)
+    path = OUT / f"dial-{inches:g}in{style.suffix}.pdf"
+    write_pdf(path, build_stream(inches, *page, style), *page)
     return path
 
 
 if __name__ == "__main__":
     for size in (6, 7, 8, 9, 10):
-        out = make(size)
-        print(f"Wrote {out}")
+        for style in STYLES:
+            out = make(size, style)
+            print(f"Wrote {out}")

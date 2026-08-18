@@ -10,7 +10,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612.00 792.00] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
 endobj
 4 0 obj
-<< /Length 6291 >>
+<< /Length 6302 >>
 stream
 1.4 w 0 0 0 RG
 522.000 424.000 m
@@ -211,7 +211,7 @@ BT /F1 11.14 Tf 188.628 618.029 Td (7) Tj ET
 BT /F1 11.14 Tf 224.734 634.865 Td (8) Tj ET
 BT /F1 11.14 Tf 263.215 645.176 Td (9) Tj ET
 0 0 0 rg
-BT /F1 8.0 Tf 169.92 170.59 Td (6 in dial  -  36 marks x 10 deg  -  A at North  -  print at 100% \(no fit-to-page\)) Tj ET
+BT /F1 8.0 Tf 151.44 170.59 Td (6 in dial  -  spokes  -  36 marks x 10 deg  -  A at North  -  print at 100% \(no fit-to-page\)) Tj ET
 BT /F1 8 Tf 179.60 158.59 Td (Cut on the circle. Letters sit outside. Align the 8 mm center with the bearing.) Tj ET
 
 endstream
@@ -226,9 +226,9 @@ xref
 0000000064 00000 n 
 0000000121 00000 n 
 0000000253 00000 n 
-0000006596 00000 n 
+0000006607 00000 n 
 trailer
 << /Size 6 /Root 1 0 R >>
 startxref
-6671
+6682
 %%EOF
