@@ -323,6 +323,19 @@ E03 is a **solid disc** (usually no hole). Glue it on the shaft **tip**. The sha
    **Debian/Ubuntu:** `sudo apt install python3-serial`  
    **Other / Windows / macOS:** `pip install pyserial` (or use a venv the same way).
 
+   Optional — spoken letters (`--sound`). Install a speech engine so the PC can say each typed character. Offline; no account.
+
+   **Arch Linux:**
+
+   ```bash
+   sudo pacman -S espeak-ng
+   ```
+
+   **Debian/Ubuntu:** `sudo apt install espeak-ng`  
+   **Other / Windows / macOS:** `pip install pyttsx3` (or use the same venv). On Linux, **pyttsx3** still needs **espeak-ng**.
+
+   `espeak` or `speech-dispatcher` (`spd-say`) also work if they are already installed. Speakers or headphones must already play sound on the PC.
+
 3. Plug **E02** into the PC with **E06**. A power LED on the Nano should light.
 4. In Arduino IDE: **Tools → Port**. You should see a port:
    - Windows: `COMx` (e.g. `COM3`)
@@ -599,13 +612,15 @@ python host/capture.py --restore config_2026_08_16_21_56.json
 
 ```bash
 python host/capture.py
+# or, speak each typed letter:
+python host/capture.py --sound
 ```
 
 Needs a finished `--calibrate` first.
 
 1. Point at **A** (top), tap. Then **J** (right), **S** (bottom), **1** (left).
 2. The live line shows `need 63°` (example) — wait until the number is near that saved mark, then tap. J and S at the same angle are refused.
-3. Tap **go**, then hold the needle on a letter. After about **1 second on the same letter**, it types. Hold in the **3.5° gap** between letters to type a space.
+3. The live line says **ready** / `tap space, then move`. Tap space. Capture does **not** start on the letter you are on (usually **1**). Move the needle first; the timer shows `move` until you leave that letter. Then hold a letter about **1 second** to type. Hold in the **3.5° gap** between letters to type a space.
 
 ```text
  328.1° A    0.7s | HELLO
@@ -614,6 +629,29 @@ Needs a finished `--calibrate` first.
 Angle, current letter, hold timer, text so far. After a letter prints the timer shows `ok` — move off it before the next one. A new line starts after 60 characters.
 
 Logs: `logs/Session_YYYY_MM_DD_HH_MM.txt` (letters) and `.log` (letters + angles).
+
+### Speak each letter — `--sound`
+
+Add `--sound` to the daily typing command. After a letter (or space) types, the PC says it out loud. Other modes (`--calibrate`, `--debug`, `--all`, …) do not speak.
+
+```bash
+python host/capture.py --sound
+```
+
+- Letters are spoken as-is (`A`, `B`, …).
+- Digits are words (`zero` … `nine`).
+- A gap types a space and says **space**.
+
+Install a speech package **once** (see Phase 1). The usual one on this machine is **espeak-ng**:
+
+```bash
+sudo pacman -S espeak-ng          # Arch
+# sudo apt install espeak-ng      # Debian/Ubuntu
+```
+
+Fallback in a venv: `pip install pyttsx3`. On Linux that library still needs **espeak-ng** installed.
+
+If no speech engine is found, typing still works and the program prints `No speech engine`.
 
 ### If something looks wrong
 
@@ -638,7 +676,7 @@ python host/capture.py --help
 
 | Flag | When to use | What happens |
 |------|-------------|--------------|
-| *(none)* | Daily typing | Loads the 36-letter map. Confirm **A, J, S, 1**. Types a character when that letter holds for `--delay` seconds. |
+| *(none)* | Daily typing | Loads the 36-letter map. Confirm **A, J, S, 1**. Tap **ready**, then **move** the needle. Types a character when that letter holds for `--delay` seconds. |
 | `--calibrate` | First time, or after hardware change | Walk **A–Z, 0–9**. Save every raw angle in `host/config.json`. Copies the old file to `host/config-backups/` first. Does **not** type. |
 | `--restore` | Undo a calibrate | List backups, or copy one back over `config.json`. No USB needed. `latest` = newest. |
 | `--debug` | Line up the base | Live angle only. Rotate the **base** (needle on A) until A is where you want north. Ctrl+C to stop. |
@@ -661,7 +699,7 @@ python host/capture.py --help
 | `--delay` | `1.0` (saved as `delay_s`) | Seconds the **same letter** must stay on screen before it types. Analog jitter is fine; changing letter resets the timer. |
 | `--wrap` | `60` (saved as `wrap_cols`) | New line after this many characters. |
 | `--invert` | off | Force reverse direction. Normally taken from `--calibrate`. |
-| `--sound` | off | Speak each typed letter or “space”. Uses **espeak-ng** (Arch: `sudo pacman -S espeak-ng`) or the `pyttsx3` library (`pip install pyttsx3`). Offline, no account. |
+| `--sound` | off | Speak each typed letter or “space” (daily typing only). Needs **espeak-ng** (`sudo pacman -S espeak-ng`) or `pip install pyttsx3` (Linux: still install **espeak-ng**). Offline, no account. |
 | `--log-dir` | `logs/` at the repo root | Where `Session_*.txt` / `Session_*.log` go. |
 
 `--delay` and `--wrap` are stored in `host/config.json`. They do **not** overwrite the 36 letter marks.
@@ -697,7 +735,7 @@ python host/capture.py --restore latest  # put the previous map back
 python host/capture.py                   # daily: A J S 1, then type
 python host/capture.py --debug           # raw angle; rotate the base
 python host/capture.py --diagnostic      # Enter + true letter → Diagnostic_*.log
-python host/capture.py --sound           # speak each letter
+python host/capture.py --sound           # speak each letter (needs espeak-ng)
 python host/capture.py --delay 1.5       # hold a bit longer before it types
 python host/capture.py --wrap 40
 python host/capture.py --port /dev/ttyUSB0
@@ -710,8 +748,8 @@ python host/capture.py --span            # full-circle min/max
 ## Phase 5 — End-to-end test
 
 1. `python host/capture.py --calibrate` — all 36 ticks, clockwise.
-2. `python host/capture.py` — A, J, S, 1 (wait for `need …°`), then go.
-3. Hold a letter ~1 s → **one** character. Timer on the live line counts up, then `ok`.
+2. `python host/capture.py` — A, J, S, 1 (wait for `need …°`), then **ready**. Tap space, **move** the needle, then hold a letter.
+3. Capture ignores the letter you were on (usually **1**) until you move. Then hold ~1 s → **one** character. Timer shows `move`, then counts up, then `ok`.
 4. Move to the next letter and hold. After 60 characters a new line starts.
 
 ---

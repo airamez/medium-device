@@ -93,6 +93,25 @@ class CardinalConfirmTests(unittest.TestCase):
         self.assertAlmostEqual(exp_j, 63.017, places=3)
 
 
+class TypingStartTests(unittest.TestCase):
+    def test_stays_locked_on_parked_letter(self):
+        self.assertFalse(c.typing_unlocked("1", 240.0, "1", 241.0))
+        self.assertFalse(c.typing_unlocked("1", 240.0, "1", 250.0))
+
+    def test_unlocks_after_real_move_to_new_letter(self):
+        self.assertTrue(c.typing_unlocked("1", 240.0, "A", 328.0))
+
+    def test_small_gap_jitter_stays_locked(self):
+        self.assertFalse(c.typing_unlocked("1", 240.0, " ", 242.0))
+        self.assertFalse(c.typing_unlocked("1", 240.0, " ", 244.0))
+
+    def test_unlocks_once_off_the_letter_and_far_enough(self):
+        self.assertTrue(c.typing_unlocked("1", 240.0, " ", 246.0))
+
+    def test_unknown_park_stays_locked(self):
+        self.assertFalse(c.typing_unlocked(None, None, "A", 10.0))
+
+
 class LetterHoldTests(unittest.TestCase):
     def test_same_letter_through_angle_jitter_types(self):
         h = c.LetterHold(hold_s=1.0)

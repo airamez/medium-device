@@ -54,6 +54,7 @@ CAL_MIN_STEP_DEG = 2.0  # two consecutive --calibrate taps closer than this are 
 CAL_REWIND = 2  # on a too-close tap, recapture this many previous letters as well
 STILL_SAMPLES = 4  # same letter this many times = stopped
 SPACE_STILL_SAMPLES = 25  # gaps need a real pause; skip letter-to-letter transit
+START_MOVE_DEG = 5.0  # after ready, ignore the parked letter until the needle moves
 CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
 
 
@@ -1061,6 +1062,25 @@ def still_needed(char: str) -> int:
     return STILL_SAMPLES
 
 
+def typing_unlocked(
+    parked_char: str | None,
+    parked_angle: float | None,
+    seen: str,
+    angle: float,
+    min_deg: float = START_MOVE_DEG,
+) -> bool:
+    """After the ready tap, typing starts only once the needle leaves that letter.
+
+    Sitting on 1 (the last confirm) must not type 1. A tiny wobble into the
+    next gap also stays locked. A real move to another letter unlocks.
+    """
+    if parked_char is None or parked_angle is None:
+        return False
+    if seen == parked_char:
+        return False
+    return circular_delta(parked_angle, angle) >= min_deg
+
+
 def should_wrap_line(line: str, char: str, wrap_cols: int) -> bool:
     """New line after wrap_cols characters."""
     del char
@@ -1423,7 +1443,7 @@ def calibrate_four(
     wait_go: bool = True,
     invert_hint: bool | None = None,
     saved: list[dict] | None = None,
-) -> tuple[list[dict], bool]:
+) -> tuple[list[dict], bool, float | None]:
     """A J S 1 on the printed sheet (north, east, south, west)."""
     print("Confirm A, J, S, 1 (top, right, bottom, left). Tap space on each.")
     print("Wait until the live angle is near the saved mark, then tap.\n")
@@ -1465,10 +1485,18 @@ def calibrate_four(
         invert = invert_hint
     else:
         invert = detect_invert(points)
+    go_angle: float | None = None
     if wait_go:
-        print("\nMove off 1, tap space to type.\n")
+        print(
+            "\nTap space when ready. Capture does not start on this letter\n"
+            "(usually 1). After space, MOVE the needle — then hold a letter.\n"
+        )
         try:
-            confirm_angle(ser, live_label="go")
+            go_angle = confirm_angle(
+                ser,
+                live_label="ready",
+                label_fn=lambda _a: "tap space, then move",
+            )
         except EOFError:
             print()
             sys.exit("Cancelled.")
@@ -1480,7 +1508,7 @@ def calibrate_four(
                 note = "  (not ~90°)"
             print(f"  {sp['from']}→{sp['to']}  {sp['raw_span']:.1f}° raw{note}")
         print()
-    return points, invert
+    return points, invert, go_angle
 
 
 def cmd_letters(
@@ -1537,7 +1565,7 @@ def cmd_letters(
         print("Need usable A, J, S, 1 in the map. Run --calibrate.")
         return 1
 
-    session_refs, invert = calibrate_four(
+    session_refs, invert, go_angle = calibrate_four(
         ser,
         invert,
         wait_go=True,
@@ -1571,7 +1599,8 @@ def cmd_letters(
     print(f"Logging {txt_name} / {log_name}")
     extra = " Speech on." if sound else ""
     print(
-        f"Hold the needle on one letter for {delay_s:.1f}s to type "
+        f"Move the needle first — the letter under it now is ignored. "
+        f"Then hold one letter for {delay_s:.1f}s to type "
         f"(space in the {GAP_BETWEEN_DEG:.1f}° gaps). "
         f"Wrap at {wrap_cols}.{extra}\n"
     )
@@ -1579,12 +1608,28 @@ def cmd_letters(
     hold = LetterHold(delay_s)
     last_emitted: str | None = None
     must_leave = False
+    parked_angle = go_angle
+    parked_char = (
+        live_char(go_angle, aligned, invert) if go_angle is not None else None
+    )
+    typing_started = parked_char is None
     typed: list[str] = []
     line = ""
 
-    def show(angle: float, seen: str, held_s: float = 0.0, armed: bool = False) -> None:
+    def show(
+        angle: float,
+        seen: str,
+        held_s: float = 0.0,
+        armed: bool = False,
+        waiting: bool = False,
+    ) -> None:
         # Only the current wrap-line is redrawn, so the terminal never wraps this.
-        timer = " ok " if armed else f"{held_s:3.1f}s"
+        if waiting:
+            timer = "move"
+        elif armed:
+            timer = " ok "
+        else:
+            timer = f"{held_s:3.1f}s"
         print(
             f"\r{angle:5.1f}° {_glyph(seen):<5}{timer}| {line}\033[K",
             end="",
@@ -1612,6 +1657,16 @@ def cmd_letters(
 
             now = time.time()
             char = live_char(angle, aligned, invert)
+            if not typing_started:
+                if parked_char is None:
+                    parked_char = char
+                    parked_angle = angle
+                if not typing_unlocked(parked_char, parked_angle, char, angle):
+                    show(angle, char, waiting=True)
+                    continue
+                typing_started = True
+                hold.clear()
+
             show(angle, char, hold.held_s(now), armed=must_leave)
 
             if must_leave:
@@ -1661,7 +1716,7 @@ def cmd_diagnostic(ser: serial.Serial, force_invert: bool, log_dir: Path) -> int
         if raw_saved
         else ([], [])
     )
-    session_refs, invert = calibrate_four(
+    session_refs, invert, _ = calibrate_four(
         ser,
         force_invert,
         wait_go=False,
