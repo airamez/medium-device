@@ -410,18 +410,20 @@ On the AS5600 module, find the labels and use these five:
 ### Wiring pictures
 
 - Arduino Nano:
-  - ![Arduino nano](docs/Arduino.webp)
+  
+  ![Arduino nano](docs/Arduino.webp)
 
 - AS5600:
-  - ![AS5600](docs/AS5600.jpg)
+  
+  ![AS5600](docs/AS5600.jpg)
 
 - Nano pin map (this project):
 
-  - ![AS5600 to Nano jumpers](docs/nano-as5600-jumpers.png)
+  ![AS5600 to Nano jumpers](docs/nano-as5600-jumpers.png)
 
-Same five wires, boards as they sit on the bench:
+- Same five wires, boards as they sit on the bench:
 
-![Arduino Nano and AS5600 wiring](docs/nano-as5600-breadboard.png)
+  ![Arduino Nano and AS5600 wiring](docs/nano-as5600-breadboard.png)
 
 - Red: **VCC → 5V**
 - Black: **GND → GND**
