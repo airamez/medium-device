@@ -4,11 +4,12 @@
  * Arduino IDE: File → Open this file → Upload → Tools → Serial Monitor → 115200
  * Or: python host/capture.py
  *
- * Normal 4 wires:
+ * Normal 5 wires:
  *   AS5600 VCC -> Nano 5V   (or 3.3V if the module says 3.3V-only)
  *   AS5600 GND -> Nano GND
  *   AS5600 SDA -> Nano A4
  *   AS5600 SCL -> Nano A5
+ *   AS5600 DIR -> Nano GND  (or a short jumper to the module GND)
  *
  * Extra diagnostic wire (add this for the test):
  *   AS5600 OUT -> Nano A0

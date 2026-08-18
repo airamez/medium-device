@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+  <rect width="1200" height="760" fill="#e2e8f0"/>
+  <text x="600" y="36" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#0f172a">Arduino Nano + AS5600 — five jumpers</text>
+  <text x="600" y="58" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#334155">VCC, GND, SDA, SCL, and DIR→GND. Leave OUT / PGO / GPO unconnected.</text>
+
+  <!-- Breadboard -->
+  <rect x="70" y="80" width="520" height="540" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>
+  <rect x="90" y="100" width="22" height="500" rx="4" fill="#fecaca"/>
+  <rect x="122" y="100" width="22" height="500" rx="4" fill="#e2e8f0"/>
+  <rect x="516" y="100" width="22" height="500" rx="4" fill="#e2e8f0"/>
+  <rect x="548" y="100" width="22" height="500" rx="4" fill="#fecaca"/>
+  <rect x="318" y="100" width="16" height="500" rx="2" fill="#cbd5e1"/>
+  <text x="330" y="635" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#64748b">breadboard trench — Nano sits across it</text>
+
+  <!-- hole hints -->
+  <g fill="#94a3b8">
+    <g transform="translate(160, 120)">
+      <!-- left of trench -->
+      <g id="col">
+        <circle cx="0" cy="0" r="2.2"/><circle cx="0" cy="16" r="2.2"/><circle cx="0" cy="32" r="2.2"/><circle cx="0" cy="48" r="2.2"/><circle cx="0" cy="64" r="2.2"/>
+        <circle cx="0" cy="80" r="2.2"/><circle cx="0" cy="96" r="2.2"/><circle cx="0" cy="112" r="2.2"/><circle cx="0" cy="128" r="2.2"/><circle cx="0" cy="144" r="2.2"/>
+        <circle cx="0" cy="160" r="2.2"/><circle cx="0" cy="176" r="2.2"/><circle cx="0" cy="192" r="2.2"/><circle cx="0" cy="208" r="2.2"/><circle cx="0" cy="224" r="2.2"/>
+        <circle cx="0" cy="240" r="2.2"/><circle cx="0" cy="256" r="2.2"/><circle cx="0" cy="272" r="2.2"/><circle cx="0" cy="288" r="2.2"/><circle cx="0" cy="304" r="2.2"/>
+        <circle cx="0" cy="320" r="2.2"/><circle cx="0" cy="336" r="2.2"/><circle cx="0" cy="352" r="2.2"/><circle cx="0" cy="368" r="2.2"/><circle cx="0" cy="384" r="2.2"/>
+        <circle cx="0" cy="400" r="2.2"/><circle cx="0" cy="416" r="2.2"/><circle cx="0" cy="432" r="2.2"/><circle cx="0" cy="448" r="2.2"/>
+      </g>
+      <use href="#col" x="16"/>
+      <use href="#col" x="32"/>
+      <use href="#col" x="48"/>
+      <use href="#col" x="64"/>
+      <use href="#col" x="192"/>
+      <use href="#col" x="208"/>
+      <use href="#col" x="224"/>
+      <use href="#col" x="240"/>
+      <use href="#col" x="256"/>
+    </g>
+  </g>
+
+  <!-- Nano on breadboard -->
+  <rect x="214" y="128" width="224" height="430" rx="8" fill="#1e3a8a" stroke="#0f172a" stroke-width="2"/>
+  <rect x="286" y="134" width="80" height="28" rx="3" fill="#64748b"/>
+  <text x="326" y="153" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#fff">USB</text>
+  <text x="326" y="198" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#93c5fd">NANO</text>
+  <text x="326" y="218" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#bfdbfe">E02  ·  ATmega328P</text>
+  <rect x="268" y="250" width="116" height="70" rx="4" fill="#172554"/>
+  <text x="326" y="280" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#93c5fd">CH340</text>
+  <text x="326" y="298" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#64748b">USB serial</text>
+
+  <!-- Nano pin labels live inside the board so wires do not cover them -->
+  <g font-family="Segoe UI, Arial, sans-serif" font-size="10" font-weight="700" text-anchor="end">
+    <circle cx="430" cy="250" r="5" fill="#f8fafc" stroke="#0f172a"/>
+    <text x="418" y="254" fill="#94a3b8">VIN</text>
+
+    <circle cx="430" cy="278" r="5" fill="#f8fafc" stroke="#0f172a"/>
+    <text x="418" y="282" fill="#f8fafc">GND</text>
+
+    <circle cx="430" cy="306" r="5" fill="#f8fafc" stroke="#0f172a"/>
+    <text x="418" y="310" fill="#94a3b8">RST</text>
+
+    <circle cx="430" cy="334" r="5" fill="#f8fafc" stroke="#0f172a"/>
+    <text x="418" y="338" fill="#fecaca">5V</text>
+
+    <circle cx="430" cy="362" r="5" fill="#f8fafc" stroke="#0f172a"/>
+    <text x="418" y="366" fill="#94a3b8">A7</text>
+
+    <circle cx="430" cy="390" r="5" fill="#f8fafc" stroke="#0f172a"/>
+    <text x="418" y="394" fill="#94a3b8">A6</text>
+
+    <circle cx="430" cy="418" r="5" fill="#f8fafc" stroke="#0f172a"/>
+    <text x="418" y="422" fill="#fde047">A5 SCL</text>
+
+    <circle cx="430" cy="446" r="5" fill="#f8fafc" stroke="#0f172a"/>
+    <text x="418" y="450" fill="#93c5fd">A4 SDA</text>
+
+    <circle cx="430" cy="474" r="5" fill="#f8fafc" stroke="#0f172a"/>
+    <text x="418" y="478" fill="#94a3b8">A3</text>
+  </g>
+
+  <!-- AS5600 module -->
+  <rect x="780" y="168" width="340" height="300" rx="10" fill="#166534" stroke="#14532d" stroke-width="2"/>
+  <text x="950" y="196" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#bbf7d0">AS5600  E01</text>
+  <text x="950" y="216" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#86efac">magnet over the black chip, 1–3 mm</text>
+  <rect x="900" y="228" width="100" height="64" rx="4" fill="#052e16" stroke="#4ade80"/>
+  <rect x="928" y="242" width="44" height="36" rx="3" fill="#111827"/>
+  <text x="950" y="264" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#86efac">chip</text>
+  <text x="950" y="312" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#86efac">Match the printed names — clone pin order varies.</text>
+  <text x="950" y="332" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#bbf7d0">OUT / PGO / GPO stay open. Do not tie PGO to GND.</text>
+  <text x="950" y="352" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#e9d5ff">DIR must not float. Fifth jumper: DIR → GND.</text>
+
+  <!-- module header pads along the bottom edge -->
+  <g font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700">
+    <rect x="800" y="400" width="44" height="28" rx="3" fill="#052e16" stroke="#fecaca"/>
+    <text x="822" y="419" text-anchor="middle" fill="#fecaca">VCC</text>
+
+    <rect x="850" y="400" width="44" height="28" rx="3" fill="#052e16" stroke="#e5e7eb"/>
+    <text x="872" y="419" text-anchor="middle" fill="#e5e7eb">GND</text>
+
+    <rect x="900" y="400" width="44" height="28" rx="3" fill="#052e16" stroke="#93c5fd"/>
+    <text x="922" y="419" text-anchor="middle" fill="#93c5fd">SDA</text>
+
+    <rect x="950" y="400" width="44" height="28" rx="3" fill="#052e16" stroke="#fde047"/>
+    <text x="972" y="419" text-anchor="middle" fill="#fde047">SCL</text>
+
+    <rect x="1000" y="400" width="44" height="28" rx="3" fill="#052e16" stroke="#d8b4fe"/>
+    <text x="1022" y="419" text-anchor="middle" fill="#d8b4fe">DIR</text>
+
+    <rect x="1050" y="400" width="50" height="28" rx="3" fill="#052e16" stroke="#64748b" stroke-dasharray="3 2"/>
+    <text x="1075" y="419" text-anchor="middle" fill="#94a3b8">OUT</text>
+  </g>
+
+  <!-- Wires: four from below into their own pad; DIR from above -->
+  <path d="M435,334 C580,334 720,560 822,560 L822,428" fill="none" stroke="#dc2626" stroke-width="4"/>
+  <path d="M435,278 C560,278 680,540 872,540 L872,428" fill="none" stroke="#111827" stroke-width="4"/>
+  <path d="M435,446 C600,520 800,580 922,580 L922,428" fill="none" stroke="#2563eb" stroke-width="4"/>
+  <path d="M435,418 C620,500 880,600 972,600 L972,428" fill="none" stroke="#ca8a04" stroke-width="4"/>
+  <path d="M435,278 C520,130 980,120 1022,120 L1022,400" fill="none" stroke="#7c3aed" stroke-width="4"/>
+
+  <!-- Legend -->
+  <rect x="70" y="640" width="1060" height="100" rx="8" fill="#fff" stroke="#cbd5e1"/>
+  <text x="90" y="666" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a">Five connections</text>
+  <text x="90" y="690" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#dc2626">Red:    VCC → 5V</text>
+  <text x="340" y="690" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#111827">Black:  GND → GND</text>
+  <text x="620" y="690" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#2563eb">Blue:   SDA → A4</text>
+  <text x="880" y="690" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#ca8a04">Yellow: SCL → A5</text>
+  <text x="90" y="716" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#7c3aed">Purple: DIR → GND  (same Nano GND as the black wire, or a short jumper from DIR to GND on the module)</text>
+</svg>

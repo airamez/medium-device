@@ -1,63 +1,68 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="640" viewBox="0 0 1100 640">
-  <rect width="1100" height="640" fill="#f8fafc"/>
-  <text x="550" y="36" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#0f172a">Jumper map: AS5600 → Arduino Nano</text>
-  <text x="550" y="58" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#475569">USB at the top of the Nano. A4, A5, 5V, GND are on the RIGHT edge.</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="740" viewBox="0 0 1100 740">
+  <rect width="1100" height="740" fill="#f8fafc"/>
+  <text x="550" y="34" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#0f172a">Jumper map: AS5600 → Arduino Nano</text>
+  <text x="550" y="56" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#475569">USB at the top. A4, A5, 5V, GND are on the RIGHT edge. Fifth wire: DIR → GND.</text>
 
   <!-- Nano body -->
-  <rect x="80" y="90" width="200" height="480" rx="8" fill="#1e3a8a" stroke="#1e293b" stroke-width="2"/>
-  <rect x="145" y="95" width="70" height="28" rx="3" fill="#64748b"/>
-  <text x="180" y="114" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#fff">USB</text>
-  <text x="180" y="150" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#93c5fd">NANO</text>
-  <text x="180" y="170" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#bfdbfe">E02</text>
+  <rect x="80" y="78" width="200" height="500" rx="8" fill="#1e3a8a" stroke="#1e293b" stroke-width="2"/>
+  <rect x="145" y="83" width="70" height="28" rx="3" fill="#64748b"/>
+  <text x="180" y="102" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#fff">USB</text>
+  <text x="180" y="140" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#93c5fd">NANO</text>
+  <text x="180" y="160" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#bfdbfe">E02</text>
 
-  <!-- Right pins we care about -->
+  <!-- Right pins, USB at top: VIN, GND, RST, 5V, A7, A6, A5, A4, … -->
   <g font-family="Segoe UI, Arial, sans-serif" font-size="13">
-    <text x="300" y="250" fill="#64748b">A0 … A3  (do not use for I2C)</text>
+    <text x="300" y="198" fill="#64748b">VIN  (do not use)</text>
 
-    <rect x="268" y="270" width="18" height="18" fill="#f8fafc" stroke="#0f172a"/>
-    <text x="300" y="284" fill="#1d4ed8" font-weight="700">A4  = SDA</text>
+    <rect x="268" y="214" width="18" height="18" fill="#f8fafc" stroke="#0f172a"/>
+    <text x="318" y="228" fill="#111827" font-weight="700">GND</text>
 
-    <rect x="268" y="300" width="18" height="18" fill="#f8fafc" stroke="#0f172a"/>
-    <text x="300" y="314" fill="#ca8a04" font-weight="700">A5  = SCL</text>
+    <text x="300" y="258" fill="#64748b">RST</text>
 
-    <text x="300" y="350" fill="#64748b">A6 A7</text>
+    <rect x="268" y="272" width="18" height="18" fill="#f8fafc" stroke="#0f172a"/>
+    <text x="300" y="286" fill="#dc2626" font-weight="700">5V</text>
 
-    <rect x="268" y="370" width="18" height="18" fill="#f8fafc" stroke="#0f172a"/>
-    <text x="300" y="384" fill="#dc2626" font-weight="700">5V</text>
+    <text x="300" y="316" fill="#64748b">A7  A6</text>
 
-    <text x="300" y="418" fill="#64748b">RST</text>
+    <rect x="268" y="332" width="18" height="18" fill="#f8fafc" stroke="#0f172a"/>
+    <text x="300" y="346" fill="#ca8a04" font-weight="700">A5  = SCL</text>
 
-    <rect x="268" y="430" width="18" height="18" fill="#f8fafc" stroke="#0f172a"/>
-    <text x="300" y="444" fill="#111827" font-weight="700">GND</text>
+    <rect x="268" y="368" width="18" height="18" fill="#f8fafc" stroke="#0f172a"/>
+    <text x="300" y="382" fill="#1d4ed8" font-weight="700">A4  = SDA</text>
 
-    <text x="300" y="478" fill="#64748b">VIN  (do not use)</text>
+    <text x="300" y="414" fill="#64748b">A3 … A0  (not used for I2C)</text>
   </g>
 
   <!-- AS5600 module -->
-  <rect x="720" y="200" width="280" height="220" rx="8" fill="#166534" stroke="#14532d" stroke-width="2"/>
-  <text x="860" y="230" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#bbf7d0">AS5600  E01</text>
-  <text x="860" y="250" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#86efac">chip in the middle faces up</text>
+  <rect x="720" y="168" width="300" height="300" rx="8" fill="#166534" stroke="#14532d" stroke-width="2"/>
+  <text x="870" y="196" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#bbf7d0">AS5600  E01</text>
+  <text x="870" y="216" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#86efac">chip in the middle faces up</text>
 
   <g font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">
-    <text x="750" y="290" fill="#fecaca">VCC</text>
-    <text x="750" y="325" fill="#e5e7eb">GND</text>
-    <text x="750" y="360" fill="#93c5fd">SDA</text>
-    <text x="750" y="395" fill="#fde047">SCL</text>
+    <text x="748" y="252" fill="#fecaca">VCC</text>
+    <text x="748" y="292" fill="#e5e7eb">GND</text>
+    <text x="748" y="332" fill="#93c5fd">SDA</text>
+    <text x="748" y="372" fill="#fde047">SCL</text>
+    <text x="748" y="412" fill="#d8b4fe">DIR</text>
   </g>
-  <text x="860" y="290" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#bbf7d0">or VDD / VIN</text>
+  <text x="820" y="252" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#bbf7d0">or VDD / VIN</text>
+  <text x="820" y="412" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#e9d5ff">tie to GND</text>
+  <text x="748" y="444" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#86efac">OUT / PGO / GPO — leave open</text>
 
   <!-- Wires -->
-  <path d="M286,379 C500,379 520,286 720,286" fill="none" stroke="#dc2626" stroke-width="4"/>
-  <path d="M286,439 C480,439 520,321 720,321" fill="none" stroke="#111827" stroke-width="4"/>
-  <path d="M286,279 C460,279 520,356 720,356" fill="none" stroke="#2563eb" stroke-width="4"/>
-  <path d="M286,309 C440,309 520,391 720,391" fill="none" stroke="#ca8a04" stroke-width="4"/>
+  <path d="M286,281 C500,281 540,248 720,248" fill="none" stroke="#dc2626" stroke-width="4"/>
+  <path d="M286,223 C470,223 540,288 720,288" fill="none" stroke="#111827" stroke-width="4"/>
+  <path d="M286,377 C450,377 540,328 720,328" fill="none" stroke="#2563eb" stroke-width="4"/>
+  <path d="M286,341 C430,341 540,368 720,368" fill="none" stroke="#ca8a04" stroke-width="4"/>
+  <path d="M286,232 C400,232 400,408 720,408" fill="none" stroke="#7c3aed" stroke-width="4"/>
 
-  <!-- Legend table -->
-  <rect x="80" y="530" width="940" height="90" rx="8" fill="#fff" stroke="#cbd5e1"/>
-  <text x="100" y="558" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a">Four jumpers only</text>
-  <text x="100" y="582" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#dc2626">Red:   AS5600 VCC → Nano 5V</text>
-  <text x="480" y="582" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#111827">Black: AS5600 GND → Nano GND</text>
-  <text x="100" y="606" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#2563eb">Blue:  AS5600 SDA → Nano A4</text>
-  <text x="480" y="606" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#ca8a04">Yellow: AS5600 SCL → Nano A5</text>
+  <!-- Legend -->
+  <rect x="80" y="598" width="940" height="122" rx="8" fill="#fff" stroke="#cbd5e1"/>
+  <text x="100" y="624" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a">Five jumpers (DIR → GND keeps the angle from jumping)</text>
+  <text x="100" y="650" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#dc2626">Red:    AS5600 VCC → Nano 5V</text>
+  <text x="520" y="650" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#111827">Black:  AS5600 GND → Nano GND</text>
+  <text x="100" y="676" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#2563eb">Blue:   AS5600 SDA → Nano A4</text>
+  <text x="520" y="676" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#ca8a04">Yellow: AS5600 SCL → Nano A5</text>
+  <text x="100" y="702" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#7c3aed">Purple: AS5600 DIR → Nano GND   (same GND row as the black wire)</text>
 </svg>

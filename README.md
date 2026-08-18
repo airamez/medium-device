@@ -27,10 +27,10 @@ You use **two different tools**. Mixing them up is why this feels confusing.
 
 ### If `scan: none` — run the wire check
 
-Software cannot always name one open wire (I2C needs all four). This sketch tests the Nano pins, optional **OUT→A0**, and prints a verdict.
+Software cannot always name one open wire (I2C needs VCC, GND, SDA, SCL). This sketch tests the Nano pins, optional **OUT→A0**, and prints a verdict. Keep **DIR → GND** as in the normal five-wire hookup.
 
-1. Keep VCC, GND, SDA, SCL as usual.
-2. Add one extra jumper if the module has **OUT**: **AS5600 OUT → Nano A0**.
+1. Keep VCC, GND, SDA, SCL, and **DIR → GND** as usual.
+2. Add one extra jumper if the module has **OUT** (diagnosis only): **AS5600 OUT → Nano A0**.
 3. Arduino IDE → **File → Open** → `firmware/wire_check/wire_check.ino` → **Upload**.
 4. `python host/capture.py --all` (or Serial Monitor **115200**).
 5. Read the **Verdict** line.
@@ -44,24 +44,33 @@ Software cannot always name one open wire (I2C needs all four). This sketch test
 
 ### Wiring pictures (jumpers)
 
-Nano-specific map (this project):
+- Arduino Nano:
+  - ![Arduino nano](docs/Arduino.webp)
 
-![AS5600 to Nano jumpers](docs/nano-as5600-jumpers.png)
+- AS5600:
+  - ![AS5600](docs/AS5600.jpg)
 
-Same four wires on an Arduino-compatible board (Adafruit, 5V):
+- Nano pin map (this project):
 
-![Adafruit AS5600 breadboard](docs/as5600-breadboard-adafruit.png)
+  - ![AS5600 to Nano jumpers](docs/nano-as5600-jumpers.png)
 
-- Red: **VCC → 5V**  
-- Black: **GND → GND**  
-- Blue: **SDA → A4** (on Nano; Adafruit Metro uses the pin labeled SDA)  
-- Yellow: **SCL → A5** (on Nano; Metro uses the pin labeled SCL)
+Same five wires, boards as they sit on the bench:
+
+![Arduino Nano and AS5600 wiring](docs/nano-as5600-breadboard.png)
+
+- Red: **VCC → 5V**
+- Black: **GND → GND**
+- Blue: **SDA → A4**
+- Yellow: **SCL → A5**
+- Purple: **DIR → GND** (same Nano GND row as the black wire, or a short jumper from **DIR** to **GND** on the module)
+
+Do **not** leave **DIR** floating. A floating DIR pin makes the 12-bit angle jump and look noisy. Tying it to GND locks clockwise counting (viewed from above the chip). Tying it to VCC would reverse the count; we use GND.
 
 Open in a browser:
 
-- Adafruit wiring: https://learn.adafruit.com/adafruit-as5600-magnetic-angle-sensor/arduino  
-- Nano A4/A5 I2C note: https://curiousscientist.tech/blog/as5600-magnetic-position-encoder  
-- Video (VCC, GND, SDA→A4, SCL→A5): https://www.youtube.com/watch?v=dsIHC96roTM  
+- DIR must be GND or VCC, never floating: https://esphome.io/components/sensor/as5600/  
+- Fluctuating readings → connect DIR to GND: https://curiousscientist.tech/blog/as5600-magnetic-position-encoder  
+- Datasheet direction pin: https://github.com/RobTillaart/AS5600#dir-pin
 
 ### How the breadboard works (read this)
 
@@ -94,7 +103,7 @@ Put the Nano **across the trench** (USB at one end). Left pins use columns a–e
 
 Find the **printed name** on the Nano (5V, GND, A0, A4, A5). Look which **number** that pin is in. Use that number.
 
-### A. Wire the four cables (unplug USB first)
+### A. Wire the five cables (unplug USB first)
 
 ```
 AS5600 (E01)          Nano (E02)
@@ -102,6 +111,7 @@ VCC  ---------------  5V     (use 3.3V only if E01 says 3.3V-only)
 GND  ---------------  GND
 SDA  ---------------  A4
 SCL  ---------------  A5
+DIR  ---------------  GND    (same GND as the black wire — do not leave DIR open)
 Nano USB  ----------  PC
 ```
 
@@ -150,16 +160,16 @@ python host/capture.py --all
 # or:  python host/capture.py --stream --port /dev/ttyUSB0
 ```
 
-Turn the magnet. The terminal should print changing lines:
+Turn the magnet. After upload you should see `filter: hyst=2lsb …` once, then changing lines:
 
 ```text
-a=47.3    (turn magnet — this number should move)
-a=90.1    (turn magnet — this number should move)
+a=47.28    (turn magnet — this number should move)
+a=90.14    (turn magnet — this number should move)
 ```
 
 **Ctrl+C** stops it.
 
-- `a=ERR` → wiring (VCC/GND/SDA/SCL).
+- `a=ERR` → wiring (VCC/GND/SDA/SCL/DIR).
 - No port / permission → `uucp` group + re-login.
 - Same number forever → magnet not diametric, or not over the chip.
 
@@ -267,7 +277,7 @@ ELEGOO Nano **without cable** needs a separate **Mini-B USB data** cable. Header
 | **E01** | AS5600 PCB | Hall chip reads E03 field → angle 0–360° | Under center of M04, chip facing magnet |
 | **E02** | Arduino Nano | I2C to E01; USB serial `a=123.4` | Breadboard (test) or under base |
 | **E03** | Solid diametric disc | Field rotates with shaft | Glued on **bottom end** of M02, 1–3 mm above E01 |
-| **E04** | Dupont wires | 5V, GND, SDA, SCL | E01 ↔ E02 |
+| **E04** | Dupont wires | 5V, GND, SDA, SCL, DIR→GND | E01 ↔ E02 |
 | **E05** | Breadboard | Solderless contacts | Bench, Phase 2 |
 | **E06** | USB cable | Power + data | E02 → PC |
 
@@ -360,14 +370,14 @@ The Nano must have pin headers so it can sit in E05. If the pack is “loose hea
 
 ### 2.2 Identify Nano pins you need
 
-Look at the silkscreen on the Nano. You need these four:
+Look at the silkscreen on the Nano. You need these pins:
 
 ```
    Typical Nano (USB at top)
 
         [USB]
    D13               VIN
-   ...               GND     <-- use this GND
+   ...               GND     <-- use this GND (black + purple DIR)
    ...               5V      <-- power to E01 (or 3.3V if module is 3.3V-only)
    ...               A7
    ...               A6
@@ -380,7 +390,7 @@ Pin names are printed on the board. **A4** and **A5** are next to each other on 
 
 ### 2.3 Identify AS5600 (E01) pins
 
-On the module, find labels. Use only:
+On the module, find labels. Use these five:
 
 ```
    E01 module (example)
@@ -389,8 +399,9 @@ On the module, find labels. Use only:
    [  SDA ]---- to Nano A4
    [  GND ]---- to Nano GND
    [  VCC ]---- to Nano 5V   (3.3V if the board says 3.3V only)
+   [  DIR ]---- to Nano GND  (or a short jumper to the module GND pin)
 
-   Ignore for now: OUT, DIR, PGO, GPO (if present)
+   Leave open: OUT, PGO, GPO (if present)
 
    The small black IC in the middle is the sensor.
    Magnet hovers over THAT chip, not the whole PCB.
@@ -398,7 +409,7 @@ On the module, find labels. Use only:
 
 ### 2.4 Wire E01 to E02 (E04 jumpers)
 
-Four wires only. Colors are a suggestion (use any, but keep a mental map).
+Five wires. Colors are a suggestion (use any, but keep a mental map).
 
 | E01 pin | Wire to E02 pin | Suggested color | Role |
 |---------|-----------------|-----------------|------|
@@ -406,6 +417,7 @@ Four wires only. Colors are a suggestion (use any, but keep a mental map).
 | **GND** | **GND** | Black | Ground (required) |
 | **SDA** | **A4** | Blue / white | I2C data |
 | **SCL** | **A5** | Yellow / green | I2C clock |
+| **DIR** | **GND** | Purple | Direction lock (required for a stable angle) |
 
 ```
    E01 AS5600                         E02 Nano
@@ -414,6 +426,7 @@ Four wires only. Colors are a suggestion (use any, but keep a mental map).
    | GND       |-------- blk ---------| GND       |
    | SDA       |-------- blu ---------| A4        |
    | SCL       |-------- yel ---------| A5        |
+   | DIR       |-------- pur ---------| GND       |
    |           |                      | USB  ---------- E06 ---------- PC
    +-----------+                      +-----------+
          ^
@@ -425,6 +438,25 @@ Rules:
 - Each jumper end must seat in the **same breadboard row** as the pin it should connect to (or clip onto the module header).
 - Do not connect 5V to 3.3V-only modules.
 - GND must be shared. No GND → nothing works.
+- **DIR** and **GND** may share the same Nano GND row. A short jumper from DIR to GND on the module is the same electrically.
+
+### 2.4.1 Extra pins do not add resolution
+
+The chip is still **12-bit** (4096 steps, about **0.088°**). DIR→GND does not add bits. It stops a floating DIR pin from randomly flipping the count direction, which is what looks like “bad precision.”
+
+| Extra pin | Connect? | Why |
+|-----------|----------|-----|
+| **DIR** | **Yes → GND** | Datasheet: must be a real logic level. Floating = jumpy angle. |
+| **OUT** | No for capture | Analog on the Nano is 10-bit, worse than I2C. |
+| **PGO** | No — leave open | Programming pin. Tying it to GND can put the chip in burn/program mode. |
+| **GPO** | No | Not used for I2C angle. |
+
+After DIR is tied, more wires will not make the needle more precise. What does:
+
+- Diametric magnet, **1–3 mm**, centered and parallel over the chip
+- Keep **I2C** (`needle_angle_stream.ino`), not analog OUT
+- Short jumpers, solid 5V/GND (most modules already have a decoupling cap)
+- Firmware already sets 2-LSB hysteresis + 16× slow filter on the chip, reads the filtered ANGLE register, and averages 8 samples (see `needle_angle_stream.ino`). Re-upload after pulling this change.
 
 ### 2.5 Place the magnet (E03)
 
@@ -709,7 +741,7 @@ The `.ino` is opened and uploaded **only** in Arduino IDE. Python is only `host/
 | See `a=…` in the IDE | Tools → Serial Monitor, baud **115200** |
 | See `a=…` on Arch | `python host/capture.py --all` **after** Upload succeeds |
 
-I2C address of AS5600 is `0x36`. Raw angle is 12-bit (0–4095) → degrees = `raw * 360 / 4096`.
+I2C address of AS5600 is `0x36`. Angle is 12-bit (0–4095) → degrees = `raw * 360 / 4096`. Firmware writes CONF (hysteresis 2 LSB, slow filter 16×), reads the filtered ANGLE register (`0x0E`), and prints the mean of 8 samples as `a=123.45`.
 
 ---
 
@@ -717,6 +749,6 @@ I2C address of AS5600 is `0x36`. Raw angle is 12-bit (0–4095) → degrees = `r
 
 1. Buy items list; solder Nano headers if needed; get a Mini-B **data** cable if the pack has none.  
 2. Phase 1: IDE + Python + port.  
-3. Phase 2: four wires, magnet over chip, upload sketch, Serial Monitor 115200.  
+3. Phase 2: five wires (incl. DIR→GND), magnet over chip, upload sketch, Serial Monitor 115200.  
 4. Phase 3: bearing, shaft, magnet on **end**, needle, letters.  
 5. Phase 4–5: `python host/capture.py --calibrate` once, then `python host/capture.py` each session (A, J, S, 1, hold to type).  

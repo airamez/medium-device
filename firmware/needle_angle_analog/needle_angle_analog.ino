@@ -6,6 +6,7 @@
  *   AS5600 VCC -> Nano 5V  (or 3.3V if module is 3.3V-only)
  *   AS5600 GND -> Nano GND
  *   AS5600 OUT -> Nano A0
+ *   AS5600 DIR -> GND      (do not leave DIR floating)
  *   Leave SDA/SCL unconnected for this test.
  */
 

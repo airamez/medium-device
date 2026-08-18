@@ -127,7 +127,7 @@
     <path d="M195,328 C230,345 270,360 270,390" fill="none" stroke="#a78bfa" stroke-width="3"/>
     <rect x="20" y="370" width="48" height="24" rx="6" fill="#4c1d95" stroke="#a78bfa"/>
     <text x="44" y="387" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#ddd6fe">E04</text>
-    <text x="310" y="387" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e2e8f0">Jumper wires</text>
+    <text x="310" y="387" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e2e8f0">Five jumpers (DIR→GND)</text>
 
     <!-- E02 -->
     <rect x="140" y="405" width="110" height="46" rx="4" fill="#1d4ed8" stroke="#93c5fd" stroke-width="2"/>
@@ -166,7 +166,7 @@
       <text x="24" y="106" fill="#f87171" font-weight="700">E03</text>
       <text x="70" y="106" fill="#cbd5e1">Diametric magnet — on shaft end, turns with needle</text>
       <text x="24" y="130" fill="#a78bfa" font-weight="700">E04</text>
-      <text x="70" y="130" fill="#cbd5e1">Jumper wires — E01 to E02</text>
+      <text x="70" y="130" fill="#cbd5e1">Jumper wires — E01 to E02 (5, including DIR→GND)</text>
       <text x="24" y="154" fill="#94a3b8" font-weight="700">E05</text>
       <text x="70" y="154" fill="#cbd5e1">Breadboard — temporary wiring</text>
       <text x="24" y="178" fill="#94a3b8" font-weight="700">E06</text>

@@ -1244,13 +1244,13 @@ def cmd_span(ser: serial.Serial, seconds: float) -> int:
             hi = max(hi, angle)
             n += 1
             left = max(0.0, end - time.time())
-            print(f"\r  now a={angle:6.1f}   min={lo:6.1f}  max={hi:6.1f}  left={left:4.1f}s   ", end="", flush=True)
+            print(f"\r  now a={angle:7.2f}   min={lo:7.2f}  max={hi:7.2f}  left={left:4.1f}s   ", end="", flush=True)
     except KeyboardInterrupt:
         print()
     print()
     span = hi - lo
     print(f"Samples: {n}")
-    print(f"Min a={lo:.1f}°   Max a={hi:.1f}°   Span={span:.1f}°")
+    print(f"Min a={lo:.2f}°   Max a={hi:.2f}°   Span={span:.2f}°")
     if n < 10:
         print("Not enough samples. Is the firmware uploading angles?")
         return 1
@@ -1266,6 +1266,7 @@ def cmd_span(ser: serial.Serial, seconds: float) -> int:
         print("  - magnet too far, too close, or off-center")
         print("  - disc not parallel to the chip")
         print("  - analog OUT only twitching; I2C would be better if we can get it working")
+        print("  - DIR pin left floating (tie AS5600 DIR to GND)")
     return 0
 
 
@@ -1801,20 +1802,20 @@ def cmd_stream(ser: serial.Serial, change_pct: float, show_all: bool) -> int:
                 print(line)
                 continue
             if last_printed is None:
-                print(f"a={angle:.1f}    (start)")
+                print(f"a={angle:.2f}    (start)")
                 last_printed = angle
                 last_status = time.time()
                 continue
             delta = circular_delta(last_printed, angle)
             if show_all or delta >= min_deg:
-                print(f"a={angle:.1f}    (moved {delta:.1f}°)")
+                print(f"a={angle:.2f}    (moved {delta:.2f}°)")
                 last_printed = angle
                 last_status = time.time()
                 continue
             now = time.time()
             if now - last_status >= 2.0:
                 print(
-                    f"  now a={angle:.1f}  moved {delta:.1f}°  "
+                    f"  now a={angle:.2f}  moved {delta:.2f}°  "
                     f"(need {min_deg:.0f}° for a new line)"
                 )
                 last_status = now
