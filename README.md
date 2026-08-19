@@ -2,11 +2,9 @@
 
 > Nota: Uma tradução em português (Brasil) desta página está disponível aqui: [README-PT-BR.md](README-PT-BR.md)
 
-This project is a physical way to type letters. A needle spins freely over a circular dial marked **A–Z** and **0–9**. You point the needle at a character, hold it still, and that character appears on the computer.
-
-Nothing on the dial is a switch. A magnet on the shaft turns a short distance above an AS5600 magnetic encoder. An Arduino Nano reads the angle and sends it over USB. A Python program on the computer turns that angle into letters, prints them, and writes a log file.
-
-Build it in this order: understand the design, install the software your computer needs, prove the electronics on a breadboard (no glue), then assemble the wooden dial, then calibrate and type. Do not glue or assemble the mechanical parts until you can see the angle change on the computer.
+- This project is a physical way to type letters. A needle spins freely over a circular dial marked **A–Z** and **0–9**. You point the needle at a character, hold it still, and that character appears on the computer.
+- Nothing on the dial is a switch. A magnet on the shaft turns a short distance above an AS5600 magnetic encoder. An Arduino Nano reads the angle and sends it over USB. A Python program on the computer turns that angle into letters, prints them, and writes a log file.
+- Build it in this order: understand the design, install the software your computer needs, prove the electronics on a breadboard (no glue), then assemble the wooden dial, then calibrate and type. Do not glue or assemble the mechanical parts until you can see the angle change on the computer.
 
 ---
 

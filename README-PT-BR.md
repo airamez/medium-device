@@ -1,10 +1,8 @@
 # Dispositivo de Entrada de Caracteres com Agulha Circular
 
-Este projeto é uma forma física de digitar letras. Uma agulha gira livremente sobre um disco circular marcado com **A–Z** e **0–9**. Você aponta a agulha para um caractere, mantém ela parada, e esse caractere aparece no computador.
-
-Nada no disco é um interruptor. Um ímã no eixo gira a uma pequena distância acima de um encoder magnético AS5600. Um Arduino Nano lê o ângulo e envia pelo USB. Um programa em Python no computador transforma esse ângulo em letras, imprime no console e grava um arquivo de log.
-
-Monte nesta ordem: entenda o projeto, instale o software que o computador precisa, comprove a eletrônica na protoboard (sem cola), depois monte o disco de madeira, e então calibre e digite. Não cole nem monte as partes mecânicas até conseguir ver o ângulo mudar no computador.
+- Este projeto é uma forma física de digitar letras. Uma agulha gira livremente sobre um disco circular marcado com **A–Z** e **0–9**. Você aponta a agulha para um caractere, mantém ela parada, e esse caractere aparece no computador.
+- Nada no disco é um interruptor. Um ímã no eixo gira a uma pequena distância acima de um encoder magnético AS5600. Um Arduino Nano lê o ângulo e envia pelo USB. Um programa em Python no computador transforma esse ângulo em letras, imprime no console e grava um arquivo de log.
+- Monte nesta ordem: entenda o projeto, instale o software que o computador precisa, comprove a eletrônica na protoboard (sem cola), depois monte o disco de madeira, e então calibre e digite. Não cole nem monte as partes mecânicas até conseguir ver o ângulo mudar no computador.
 
 ---
 
