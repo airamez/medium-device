@@ -6,6 +6,7 @@ uneven marks and a warped sensor). Each session: confirm A, J, S, 1 so a
 moved base can be aligned to that saved map.
 
 Examples:
+  python capture-gui.py                # on-screen dial, A at north, then type
   python capture.py --calibrate        # save all 36 letter positions
   python capture.py                    # confirm A J S 1, then type
   python capture.py --debug            # live pointer angle
@@ -47,6 +48,8 @@ GAP_BETWEEN_DEG = 3.5
 LETTER_DEG = SECTOR_DEG - GAP_BETWEEN_DEG  # 6.5°
 HALF_LETTER_DEG = LETTER_DEG / 2.0
 GAP_SIDE_DEG = GAP_BETWEEN_DEG / 2.0
+HYST_DEG = 1.0  # stay on the current letter/space until the needle leaves this extra band
+SPACE_HOLD_MULT = 1.6  # gaps need a longer hold so a sweep does not type a space
 DEFAULT_DELAY_S = 1.0
 DEFAULT_WRAP_COLS = 60
 DEFAULT_STILL_TOL_DEG = 2.0  # parked if the live angle stays within this of the lock
@@ -174,6 +177,17 @@ class RestWindow:
             return False
         return circular_range([a for _, a in self.samples]) <= self.tol_deg
 
+    def is_still(self, now: float, window_s: float = 0.30) -> bool:
+        """True if the most recent window_s of samples stay within tol_deg.
+
+        Used to start the type timer only after the needle has actually
+        stopped, not merely while it lingers on the same letter.
+        """
+        recent = [a for t, a in self.samples if now - t <= window_s]
+        if len(recent) < 2:
+            return False
+        return circular_range(recent) <= self.tol_deg
+
     def mean(self) -> float:
         return circular_mean([a for _, a in self.samples])
 
@@ -183,19 +197,27 @@ class LetterHold:
 
     Analog jitter of a few degrees is still the same letter on a 10° map.
     RestWindow's 2° band treated that jitter as 'still moving' and never typed.
+    Spaces use a longer hold so a slow sweep through a gap does not type.
     """
 
-    def __init__(self, hold_s: float) -> None:
+    def __init__(self, hold_s: float, space_hold_s: float | None = None) -> None:
         self.hold_s = hold_s
+        self.space_hold_s = (
+            hold_s * SPACE_HOLD_MULT if space_hold_s is None else space_hold_s
+        )
         self.char: str | None = None
         self.t0: float | None = None
+
+    def need_s(self, char: str | None = None) -> float:
+        ch = self.char if char is None else char
+        return self.space_hold_s if ch == " " else self.hold_s
 
     def update(self, now: float, char: str) -> bool:
         if char != self.char or self.t0 is None:
             self.char = char
             self.t0 = now
             return False
-        return (now - self.t0) >= self.hold_s * 0.85
+        return (now - self.t0) >= self.need_s(char) * 0.85
 
     def held_s(self, now: float) -> float:
         if self.t0 is None:
@@ -210,6 +232,14 @@ class LetterHold:
 def char_dial(ch: str) -> float:
     """Dial degrees at the center of a letter sticker (A = 0°, B = 10°, …)."""
     return CHARS.index(ch) * SECTOR_DEG
+
+
+def dial_xy(
+    dial_deg: float, cx: float, cy: float, radius: float
+) -> tuple[float, float]:
+    """Screen point for a dial angle. 0° is north (up), then clockwise."""
+    rad = math.radians(float(dial_deg))
+    return cx + radius * math.sin(rad), cy - radius * math.cos(rad)
 
 
 def make_point(ch: str, angle: float) -> dict:
@@ -535,16 +565,23 @@ def nearest_cal_char(angle: float, points: list[dict]) -> str:
     return min(points, key=lambda p: circular_delta(p["angle"], angle))["char"]
 
 
-def cal_char_or_space(
+def nearest_cal_window(
     angle: float, points: list[dict], gap_deg: float = GAP_BETWEEN_DEG
-) -> str:
-    """Nearest saved mark, or space if the needle sits in the 3–4° gap."""
+) -> tuple[str, float, float]:
+    """Nearest saved mark, distance to it, and that letter's half-width.
+
+    The gap is a fraction of the local step (3.5° of a 10° paper sector),
+    not a fixed 3.5° in sensor space. Compressed chip sectors still have
+    a usable letter window.
+    """
     if not points:
-        return "?"
+        return "?", 0.0, HALF_LETTER_DEG
     by = {p["char"]: p for p in points}
     ordered = [by[ch] for ch in CHARS if ch in by]
     if len(ordered) < 2:
-        return nearest_cal_char(angle, points)
+        ch = nearest_cal_char(angle, points)
+        mark = by.get(ch, ordered[0] if ordered else {"angle": 0.0})
+        return ch, circular_delta(mark["angle"], angle), HALF_LETTER_DEG
     n = len(ordered)
     i = min(range(n), key=lambda k: circular_delta(ordered[k]["angle"], angle))
     nearest = ordered[i]
@@ -557,9 +594,20 @@ def cal_char_or_space(
         nearest["angle"],
         prev["angle"] if toward_prev < toward_next else nxt["angle"],
     )
-    half = max(0.2, (span - gap_deg) / 2.0)
+    frac = gap_deg / SECTOR_DEG
+    half = max(0.2, span * (1.0 - frac) / 2.0)
+    return nearest["char"], d_near, half
+
+
+def cal_char_or_space(
+    angle: float, points: list[dict], gap_deg: float = GAP_BETWEEN_DEG
+) -> str:
+    """Nearest saved mark, or space if the needle sits in the gap."""
+    if not points:
+        return "?"
+    ch, d_near, half = nearest_cal_window(angle, points, gap_deg)
     if d_near <= half:
-        return nearest["char"]
+        return ch
     return " "
 
 
@@ -916,6 +964,51 @@ def signed_turn(start: float, end: float) -> float:
     return (end - start + 180.0) % 360.0 - 180.0
 
 
+def travel_slot(
+    travel_deg: float,
+    step_deg: float,
+    current_slot: int,
+    hyst_frac: float = 0.25,
+) -> int:
+    """Map unwrapped needle travel onto equal-sized character slots.
+
+    Every character (letter, space, backspace) owns the same step_deg.
+    Once a slot is selected, travel must pass the boundary by hyst_frac
+    of a step before the selection moves. That gives a wide stop window.
+
+    A noisy or batched sample can jump many degrees at once. Never skip
+    slots: walk one cell toward the target so a little move cannot leap
+    over letters. Fast spins catch up on later frames.
+    """
+    if step_deg <= 0:
+        return current_slot
+    pos = travel_deg / step_deg
+    lo = current_slot - 0.5 - hyst_frac
+    hi = current_slot + 0.5 + hyst_frac
+    if lo <= pos <= hi:
+        return current_slot
+    target = int(math.floor(pos + 0.5))
+    if target > current_slot:
+        return current_slot + 1
+    if target < current_slot:
+        return current_slot - 1
+    return current_slot
+
+
+def slot_offset_frac(
+    travel_deg: float, step_deg: float, slot: int
+) -> float:
+    """Where the needle sits inside the current cell, 0..1.
+
+    0 is the previous-letter edge, 0.5 is the cell centre, 1 is the next
+    letter edge. Values are clamped so a lagged catch-up still draws.
+    """
+    if step_deg <= 0:
+        return 0.5
+    offset = travel_deg - slot * step_deg
+    return max(0.0, min(1.0, 0.5 + offset / step_deg))
+
+
 def invert_from_clockwise_move(a_angle: float, toward_b: float) -> bool:
     """Paper is clockwise A→B. Invert if the sensor went the other way."""
     return signed_turn(a_angle, toward_b) < 0
@@ -952,6 +1045,54 @@ def live_char(
     return match_char(angle, session_a_offset(points, offset), invert)
 
 
+def hysteretic_dial_char(
+    dial: float,
+    prev: str | None,
+    gap_deg: float = GAP_BETWEEN_DEG,
+    hyst_deg: float = HYST_DEG,
+) -> str:
+    """Letter/space with a Schmitt trigger so the edge does not flicker.
+
+    Stay on a letter until the needle is clearly in the gap (or the next
+    letter). Stay on a space until the needle is clearly inside a letter.
+    """
+    raw = dial_to_char(dial, gap_deg)
+    if prev is None or prev == raw:
+        return raw
+    half = (SECTOR_DEG - gap_deg) / 2.0
+    if prev != " " and prev in CHARS:
+        if abs(signed_from_center(char_dial(prev), dial)) <= half + hyst_deg:
+            return prev
+    if prev == " " and raw != " ":
+        center = nearest_letter_idx(dial) * SECTOR_DEG
+        if abs(signed_from_center(center, dial)) > max(0.2, half - hyst_deg):
+            return " "
+    return raw
+
+
+def hysteretic_cal_char(
+    angle: float,
+    points: list[dict],
+    prev: str | None,
+    gap_deg: float = GAP_BETWEEN_DEG,
+    hyst_deg: float = HYST_DEG,
+) -> str:
+    """Same edge hold as hysteretic_dial_char, using saved marks."""
+    raw = cal_char_or_space(angle, points, gap_deg)
+    if prev is None or prev == raw:
+        return raw
+    by = {p["char"]: p for p in points}
+    if prev != " " and prev in by:
+        _ch, _d, half = nearest_cal_window(by[prev]["angle"], points, gap_deg)
+        if circular_delta(by[prev]["angle"], angle) <= half + hyst_deg:
+            return prev
+    if prev == " " and raw != " ":
+        _ch, d_near, half = nearest_cal_window(angle, points, gap_deg)
+        if d_near > max(0.2, half - hyst_deg):
+            return " "
+    return raw
+
+
 def angle_to_char(
     angle: float,
     offset: float = 0.0,
@@ -967,11 +1108,19 @@ def angle_to_char(
 
 
 def log_glyph(char: str) -> str:
-    return "SP" if char == " " else char
+    if char == " ":
+        return "SP"
+    if char == "\b":
+        return "BS"
+    if char == "\t":
+        return "OK"
+    return char
 
 
 _SPEAK_WORDS = {
     " ": "space",
+    "\b": "backspace",
+    "\t": "complete",
     "0": "zero",
     "1": "one",
     "2": "two",
@@ -1053,7 +1202,11 @@ def speak_glyph(char: str) -> None:
 
 
 def allow_emit(char: str, typed: list[str]) -> bool:
-    del char, typed
+    """Letters and backspace always. A second space needs a letter in between."""
+    if char == "\b":
+        return True
+    if char == " " and typed and typed[-1] == " ":
+        return False
     return True
 
 
@@ -1606,7 +1759,9 @@ def cmd_letters(
     )
 
     hold = LetterHold(delay_s)
+    rest = RestWindow(delay_s, still_tol_deg)
     last_emitted: str | None = None
+    shown: str | None = None
     must_leave = False
     parked_angle = go_angle
     parked_char = (
@@ -1656,7 +1811,17 @@ def cmd_letters(
                 continue
 
             now = time.time()
-            char = live_char(angle, aligned, invert)
+            rest.add(now, angle)
+            if len(aligned) >= 2:
+                char = hysteretic_cal_char(angle, aligned, shown)
+            else:
+                char = hysteretic_dial_char(
+                    offset_to_dial(
+                        angle, session_a_offset(aligned, 0.0), invert
+                    ),
+                    shown,
+                )
+            shown = char
             if not typing_started:
                 if parked_char is None:
                     parked_char = char
@@ -1666,6 +1831,7 @@ def cmd_letters(
                     continue
                 typing_started = True
                 hold.clear()
+                rest.clear()
 
             show(angle, char, hold.held_s(now), armed=must_leave)
 
@@ -1679,6 +1845,8 @@ def cmd_letters(
 
             if not hold.update(now, char):
                 continue
+            if char == " " and not rest.ready(now):
+                continue
             if not allow_emit(char, typed):
                 continue
 
@@ -1691,6 +1859,7 @@ def cmd_letters(
             last_emitted = char
             must_leave = True
             hold.clear()
+            rest.clear()
             if should_wrap_line(line, char, wrap_cols):
                 print()
                 line = ""

@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 import capture as c
+import words as w
 
 
 def pts(*pairs: tuple[str, float]) -> list[dict]:
@@ -112,6 +113,47 @@ class TypingStartTests(unittest.TestCase):
         self.assertFalse(c.typing_unlocked(None, None, "A", 10.0))
 
 
+class TravelSlotTests(unittest.TestCase):
+    def test_equal_steps_for_every_cell(self):
+        # 10° per character, starting on slot 0 at travel 0.
+        self.assertEqual(c.travel_slot(0.0, 10.0, 0), 0)
+        self.assertEqual(c.travel_slot(4.9, 10.0, 0), 0)
+        self.assertEqual(c.travel_slot(7.6, 10.0, 0), 1)
+        self.assertEqual(c.travel_slot(10.0, 10.0, 1), 1)
+        self.assertEqual(c.travel_slot(17.6, 10.0, 1), 2)
+
+    def test_space_and_backspace_same_width_as_letters(self):
+        # Slot 5 (e.g. space) and 6 (backspace) use the same 10° as A–E.
+        self.assertEqual(c.travel_slot(50.0, 10.0, 5), 5)
+        self.assertEqual(c.travel_slot(57.6, 10.0, 5), 6)
+        self.assertEqual(c.travel_slot(60.0, 10.0, 6), 6)
+
+    def test_hysteresis_holds_the_current_slot(self):
+        # Boundary without hyst is 5°. Stay on 0 until past 7.5° (0.5+0.25).
+        self.assertEqual(c.travel_slot(7.4, 10.0, 0), 0)
+        self.assertEqual(c.travel_slot(7.6, 10.0, 0), 1)
+
+    def test_fast_spin_steps_one_slot_at_a_time(self):
+        # 34° is three cells from 0, but a single update must not skip B and C.
+        self.assertEqual(c.travel_slot(34.0, 10.0, 0), 1)
+        self.assertEqual(c.travel_slot(34.0, 10.0, 1), 2)
+        self.assertEqual(c.travel_slot(34.0, 10.0, 2), 3)
+        self.assertEqual(c.travel_slot(34.0, 10.0, 3), 3)
+
+    def test_small_overshoot_does_not_skip_a_letter(self):
+        # 15° is 1.5 cells — nearest-slot rounding used to jump 0 → 2.
+        self.assertEqual(c.travel_slot(15.0, 10.0, 0), 1)
+        self.assertEqual(c.travel_slot(0.0, 10.0, 2), 1)
+
+    def test_slot_offset_frac(self):
+        self.assertAlmostEqual(c.slot_offset_frac(0.0, 10.0, 0), 0.5)
+        self.assertAlmostEqual(c.slot_offset_frac(5.0, 10.0, 0), 1.0)
+        self.assertAlmostEqual(c.slot_offset_frac(-5.0, 10.0, 0), 0.0)
+        self.assertAlmostEqual(c.slot_offset_frac(10.0, 10.0, 1), 0.5)
+        self.assertAlmostEqual(c.slot_offset_frac(12.0, 10.0, 1), 0.7)
+        self.assertEqual(c.slot_offset_frac(80.0, 10.0, 0), 1.0)
+
+
 class LetterHoldTests(unittest.TestCase):
     def test_same_letter_through_angle_jitter_types(self):
         h = c.LetterHold(hold_s=1.0)
@@ -148,6 +190,22 @@ class RestWindowTests(unittest.TestCase):
 
     def test_range_across_zero(self):
         self.assertAlmostEqual(c.circular_range([359.8, 0.2]), 0.4, places=5)
+
+    def test_is_still_false_while_sweeping(self):
+        w = c.RestWindow(hold_s=1.0, tol_deg=2.0)
+        t0 = 1000.0
+        for i in range(6):
+            w.add(t0 + i * 0.08, 20.0 + i * 1.5)
+        self.assertFalse(w.is_still(t0 + 0.40, window_s=0.30))
+
+    def test_is_still_true_after_parking(self):
+        w = c.RestWindow(hold_s=1.0, tol_deg=2.0)
+        t0 = 1000.0
+        for i in range(6):
+            w.add(t0 + i * 0.08, 20.0 + i * 2.0)
+        for i in range(6):
+            w.add(t0 + 0.55 + i * 0.06, 31.0)
+        self.assertTrue(w.is_still(t0 + 0.90, window_s=0.30))
 
 
 class InvertDetectTests(unittest.TestCase):
@@ -686,6 +744,73 @@ class AllowEmitTests(unittest.TestCase):
         self.assertTrue(c.allow_emit("B", ["A"]))
         self.assertTrue(c.allow_emit("C", ["A", " ", "B"]))
 
+    def test_blocks_consecutive_spaces(self):
+        self.assertTrue(c.allow_emit(" ", []))
+        self.assertTrue(c.allow_emit(" ", ["A"]))
+        self.assertFalse(c.allow_emit(" ", ["A", " "]))
+        self.assertTrue(c.allow_emit("B", ["A", " "]))
+
+    def test_backspace_always_ok(self):
+        self.assertTrue(c.allow_emit("\b", []))
+        self.assertTrue(c.allow_emit("\b", ["A"]))
+        self.assertTrue(c.allow_emit("\b", ["A", "\b"]))
+
+
+class DialXyTests(unittest.TestCase):
+    def test_a_is_north(self):
+        x, y = c.dial_xy(0.0, 100.0, 100.0, 50.0)
+        self.assertAlmostEqual(x, 100.0)
+        self.assertAlmostEqual(y, 50.0)
+
+    def test_j_is_east(self):
+        x, y = c.dial_xy(90.0, 100.0, 100.0, 50.0)
+        self.assertAlmostEqual(x, 150.0)
+        self.assertAlmostEqual(y, 100.0)
+
+    def test_s_is_south(self):
+        x, y = c.dial_xy(180.0, 100.0, 100.0, 50.0)
+        self.assertAlmostEqual(x, 100.0)
+        self.assertAlmostEqual(y, 150.0)
+
+
+class HysteresisTests(unittest.TestCase):
+    def test_stays_on_letter_through_gap_edge(self):
+        # Letter window is ±3.25°. 3.6° is a space without hysteresis,
+        # but still inside the 1° hold band of A.
+        self.assertEqual(c.dial_to_char(3.6), " ")
+        self.assertEqual(c.hysteretic_dial_char(3.6, "A"), "A")
+
+    def test_leaves_letter_once_clearly_in_the_gap(self):
+        self.assertEqual(c.hysteretic_dial_char(5.0, "A"), " ")
+
+    def test_space_does_not_enter_letter_at_the_edge(self):
+        self.assertEqual(c.dial_to_char(3.0), "A")
+        self.assertEqual(c.hysteretic_dial_char(3.0, " "), " ")
+
+    def test_space_enters_letter_when_inside(self):
+        self.assertEqual(c.hysteretic_dial_char(1.5, " "), "A")
+
+    def test_jump_to_next_letter(self):
+        self.assertEqual(c.hysteretic_dial_char(10.0, "A"), "B")
+
+
+class CompressedCalGapTests(unittest.TestCase):
+    def test_tight_pair_still_reads_as_the_letter(self):
+        # Session 2026-08-19: E and F were 5.56° apart after alignment.
+        # A fixed 3.5° gap left only ~1° of letter and typed space at 1.5°.
+        points = pts(("E", 0.0), ("F", 5.56), ("G", 15.56))
+        self.assertEqual(c.cal_char_or_space(1.54, points), "E")
+        self.assertEqual(c.hysteretic_cal_char(1.54, points, "E"), "E")
+
+
+class LetterHoldSpaceTests(unittest.TestCase):
+    def test_space_needs_a_longer_hold(self):
+        h = c.LetterHold(hold_s=1.0)
+        t0 = 1000.0
+        self.assertFalse(h.update(t0, " "))
+        self.assertFalse(h.update(t0 + 0.85, " "))
+        self.assertTrue(h.update(t0 + 1.40, " "))
+
 class WrapLineTests(unittest.TestCase):
     def test_wraps_after_limit(self):
         self.assertTrue(c.should_wrap_line("A" * 60, "B", 60))
@@ -871,6 +996,139 @@ class DiagnosticSampleTests(unittest.TestCase):
         self.assertAlmostEqual(spans["1→A"], 133.71, places=2)
         header = c.format_diagnostic_header(points, False)
         self.assertIn("WARPED", header)
+
+
+class WordIndexTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.idx = w.load_index()
+
+    def test_loaded_about_40k(self):
+        self.assertGreaterEqual(len(self.idx), 39_000)
+        self.assertLessEqual(len(self.idx), 41_000)
+
+    def test_prefix_picks_most_frequent(self):
+        self.assertEqual(self.idx.complete("th"), "the")
+        self.assertEqual(self.idx.complete("the"), "the")
+        self.assertEqual(self.idx.complete("hel"), "help")
+        self.assertEqual(self.idx.closest("HEL"), "help")
+
+    def test_tiny_trie_and_draft(self):
+        idx = w.WordIndex()
+        for word in ("the", "that", "hello", "help", "cat"):
+            idx.insert(word)
+        self.assertEqual(idx.complete("th"), "the")
+        self.assertEqual(idx.complete("hel"), "hello")
+        self.assertEqual(idx.complete("c"), "cat")
+        draft = w.WordDraft(idx)
+        draft.add("H")
+        draft.add("E")
+        draft.add("L")
+        self.assertEqual(draft.typed, "HEL")
+        self.assertEqual(draft.suggestion, "HELLO")
+        self.assertEqual(draft.ghost, "LO")
+        self.assertTrue(draft.is_prefix)
+        self.assertEqual(draft.take_suggestion(), "HELLO")
+        self.assertEqual(draft.typed, "")
+
+    def test_space_keeps_typed_letters(self):
+        idx = w.WordIndex()
+        idx.insert("help")
+        idx.insert("hello")
+        draft = w.WordDraft(idx)
+        for ch in "HEL":
+            draft.add(ch)
+        self.assertEqual(draft.suggestion, "HELP")
+        self.assertEqual(draft.take_typed(), "HEL")
+        self.assertEqual(draft.typed, "")
+
+    def test_fuzzy_when_prefix_missing(self):
+        idx = w.WordIndex()
+        for word in ("hello", "help", "world"):
+            idx.insert(word)
+        self.assertIsNone(idx.complete("helo"))
+        self.assertEqual(idx.closest("helo"), "hello")
+
+    def test_take_last_word(self):
+        chars = list("HELLO WORLD ")
+        self.assertEqual(w.take_last_word(chars), "WORLD")
+        self.assertEqual("".join(chars), "HELLO ")
+        self.assertEqual(w.take_last_word(chars), "HELLO")
+        self.assertEqual("".join(chars), "")
+        self.assertIsNone(w.take_last_word(chars))
+
+    def test_backspace_restores_word_into_draft(self):
+        chars = list("HELLO WORLD ")
+        word = w.take_last_word(chars)
+        draft = w.WordDraft(w.WordIndex())
+        for ch in word:
+            draft.add(ch)
+        self.assertEqual(draft.typed, "WORLD")
+        self.assertTrue(draft.backspace())
+        self.assertEqual(draft.typed, "WORL")
+
+    def test_delete_current_word_peels_draft(self):
+        draft = w.WordDraft(w.WordIndex())
+        for ch in "HEL":
+            draft.add(ch)
+        committed: list[str] = []
+        self.assertTrue(w.delete_current_word(draft, committed))
+        self.assertEqual(draft.typed, "HE")
+        self.assertEqual(draft.suggestion, "HE")
+        self.assertEqual(committed, [])
+
+    def test_delete_current_word_pulls_then_peels(self):
+        draft = w.WordDraft(w.WordIndex())
+        committed = list("HELP ")
+        self.assertTrue(w.delete_current_word(draft, committed))
+        self.assertEqual(draft.typed, "HEL")
+        self.assertEqual(draft.suggestion, "HEL")
+        self.assertEqual("".join(committed), "")
+        empty = w.WordDraft(w.WordIndex())
+        self.assertFalse(w.delete_current_word(empty, []))
+
+    def test_backspace_drops_ghost_then_letters(self):
+        draft = w.WordDraft(self.idx)
+        for ch in "HEL":
+            draft.add(ch)
+        self.assertEqual(draft.suggestion, "HELP")
+        self.assertEqual(draft.ghost, "P")
+        self.assertTrue(w.delete_current_word(draft, []))
+        self.assertEqual(draft.typed, "HEL")
+        self.assertEqual(draft.suggestion, "HEL")
+        self.assertEqual(draft.ghost, "")
+        self.assertTrue(w.delete_current_word(draft, []))
+        self.assertEqual(draft.typed, "HE")
+        self.assertEqual(draft.suggestion, "HE")
+
+    def test_backspace_on_the_does_not_stay_the(self):
+        draft = w.WordDraft(self.idx)
+        for ch in "THE":
+            draft.add(ch)
+        self.assertEqual(draft.suggestion, "THE")
+        self.assertTrue(w.delete_current_word(draft, []))
+        self.assertEqual(draft.typed, "TH")
+        self.assertEqual(draft.suggestion, "TH")
+        self.assertNotEqual(draft.suggestion, "THE")
+
+    def test_draft_ignores_control_tokens(self):
+        draft = w.WordDraft(w.WordIndex())
+        draft.add("\b")
+        draft.add("\t")
+        draft.add("⌫")
+        draft.add("✓")
+        draft.add(" ")
+        self.assertEqual(draft.typed, "")
+        draft.add("A")
+        self.assertEqual(draft.typed, "A")
+
+    def test_digits_are_not_completed(self):
+        self.assertIsNone(self.idx.closest("2"))
+        self.assertIsNone(self.idx.closest("A1"))
+
+    def test_log_glyph_complete(self):
+        self.assertEqual(c.log_glyph("\t"), "OK")
+        self.assertEqual(c.speak_word("\t"), "complete")
 
 
 if __name__ == "__main__":
