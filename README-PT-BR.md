@@ -1,8 +1,8 @@
 # Dispositivo de Entrada de Caracteres com Agulha Circular
 
-- Este projeto é uma forma física de digitar letras. Uma agulha gira livremente sobre um disco circular marcado com **A–Z** e **0–9**. Você aponta a agulha para um caractere, mantém ela parada, e esse caractere aparece no computador.
-- Nada no disco é um interruptor. Um ímã no eixo gira a uma pequena distância acima de um encoder magnético AS5600. Um Arduino Nano lê o ângulo e envia pelo USB. Um programa em Python no computador transforma esse ângulo em letras, imprime no console e grava um arquivo de log.
-- Monte nesta ordem: entenda o projeto, instale o software que o computador precisa, comprove a eletrônica na protoboard (sem cola), depois monte o disco de madeira, e então calibre e digite. Não cole nem monte as partes mecânicas até conseguir ver o ângulo mudar no computador.
+- Este projeto é uma forma física de digitar letras. Uma agulha gira livremente sobre uma pequena base. Um ímã no eixo da agulha gira a uma pequena distância acima de um encoder magnético AS5600. Um Arduino Nano lê o ângulo e envia pelo USB.
+- Um único programa em Python, `host/capture.py`, abre na tela uma grade com todas as letras, dígitos e teclas de controle. Um giro pequeno da agulha — alguns graus, no sentido horário ou anti-horário — move o destaque para a célula seguinte ou anterior. Mantenha parado numa célula por cerca de um segundo e aquele caractere é digitado.
+- Não há nada para calibrar em 36 posições exatas de um disco impresso: a agulha só informa giros *relativos*, e a tela sempre mostra o que está selecionado. Ordem de montagem: entenda o projeto, instale o software, comprove a eletrônica na protoboard (sem cola), monte a agulha giratória, então rode o `capture.py` e digite.
 
 ---
 
@@ -10,15 +10,16 @@
 
 1. [O que você está construindo](#o-que-você-está-construindo)
 2. [Como funciona](#como-funciona)
-3. [Os dois programas](#os-dois-programas)
+3. [O software](#o-software)
 4. [Peças](#peças)
 5. [Instalação](#instalação)
 6. [Montagem e execução](#montagem-e-execução)
 7. [Mecânica](#mecânica)
 8. [Digitar letras](#digitar-letras)
-9. [Referência do capture.py](#referência-do-capturepy)
-10. [Folha de consulta do Arduino](#folha-de-consulta-do-arduino)
-11. [Pronto quando](#pronto-quando)
+9. [Interface do capture.py](#interface-do-capturepy)
+10. [Referência do capture.py](#referência-do-capturepy)
+11. [Folha de consulta do Arduino](#folha-de-consulta-do-arduino)
+12. [Pronto quando](#pronto-quando)
 
 ---
 
@@ -77,30 +78,16 @@ Os códigos dos itens coincidem com a [lista de peças](#peças): **E** é eletr
 
 O ímã precisa ser um disco **diametral** (os polos ficam em lados opostos da face, não nas duas faces planas). Ele fica na **ponta de baixo** do eixo, 1–3 mm acima do chip preto do AS5600. O eixo passa só pelo rolamento, não pelo ímã.
 
-Os discos impressos (imprima em 100%, sem ajustar à página) estão em `docs/base-templates/`. Os tamanhos vão de 6" a 10". **A** fica no norte. As letras seguem no sentido horário, A–Z e depois 0–9. As letras ficam **fora** do círculo de corte. 6" e 7" cabem em papel carta (letter); 8", 9" e 10" cabem em tabloide (11×17).
-
-Cada tamanho tem vários layouts (os nomes abaixo são os arquivos de 6"):
-
-| Arquivo | Layout |
-|------|--------|
-| `dial-6in.pdf` | Raios do centro até cada caractere |
-| `dial-6in-nolines.pdf` | Só as letras, sem raios |
-| `dial-6in-big.pdf` | Letras maiores, com raios |
-| `dial-6in-big-nolines.pdf` | Letras maiores, sem raios |
-| `dial-6in-box.pdf` | Um quadradinho **logo antes** de cada caractere — aponte a agulha para dentro da caixa |
-| `dial-6in-big-box.pdf` | Letras maiores com as caixas de mira |
-
-Os arquivos `-box` são os mais fáceis de apontar: a caixa fica na borda, alinhada com a letra, para você ver quando o ponteiro está nesse caractere.
+Diferente de um ponteiro de relógio, a agulha não precisa apontar para uma letra impressa. O `capture.py` só lê quanto e para que lado ela girou desde a última checagem — é a grade na tela, não o disco, que mostra qual caractere está selecionado. Ou seja, não existe disco para imprimir, marcar ou calibrar; o círculo de madeira (M04) só dá à agulha um lugar para girar e uma base firme e confortável.
 
 ### Organização do repositório
 
 ```
 medium-device/
   README.md
-  docs/                diagramas, fotos
-  docs/base-templates/ discos para imprimir (6–10 in, vários layouts)
+  docs/                diagramas, fotos, captura de tela da interface
   firmware/            sketches Arduino (abra estes somente no Arduino IDE)
-  host/                programa Python de captura
+  host/                programa Python de captura (capture.py, words.py)
   logs/                criado em tempo de execução
 ```
 

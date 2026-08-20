@@ -131,6 +131,7 @@ class WordDraft:
         self.index = index
         self.letters: list[str] = []
         self.pinned: str | None = None
+        self.enabled = True
         self._sug_cache_key: str | None = None
         self._sug_cache_val: str = ""
 
@@ -140,9 +141,11 @@ class WordDraft:
 
     @property
     def suggestion(self) -> str:
+        typed = self.typed
+        if not self.enabled:
+            return typed
         if self.pinned is not None:
             return self.pinned
-        typed = self.typed
         # closest() can fall back to a fuzzy scan of every dictionary word
         # (MAX_FUZZY_DIST). Properties get read several times per draw
         # frame (60x/sec) by the GUI, so without this cache an unmatched

@@ -2,9 +2,9 @@
 
 > Nota: Uma tradução em português (Brasil) desta página está disponível aqui: [README-PT-BR.md](README-PT-BR.md)
 
-- This project is a physical way to type letters. A needle spins freely over a circular dial marked **A–Z** and **0–9**. You point the needle at a character, hold it still, and that character appears on the computer.
-- Nothing on the dial is a switch. A magnet on the shaft turns a short distance above an AS5600 magnetic encoder. An Arduino Nano reads the angle and sends it over USB. A Python program on the computer turns that angle into letters, prints them, and writes a log file.
-- Build it in this order: understand the design, install the software your computer needs, prove the electronics on a breadboard (no glue), then assemble the wooden dial, then calibrate and type. Do not glue or assemble the mechanical parts until you can see the angle change on the computer.
+- This project is a physical way to type letters. A needle spins freely on a small base. A magnet on the needle's shaft turns a short distance above an AS5600 magnetic encoder. An Arduino Nano reads the angle and sends it over USB.
+- A single Python program, `host/capture.py`, opens an on-screen grid of every letter, digit, and control key. A small turn of the needle — a few degrees, clockwise or counter-clockwise — moves the highlight to the next or previous cell. Hold still on a cell for about a second and that character types.
+- There is nothing to calibrate to 36 exact positions on a printed dial: the needle only reports *relative* turns, and the screen always shows what is selected. Build order: understand the design, install the software, prove the electronics on a breadboard (no glue), assemble the spinning needle, then run `capture.py` and type.
 
 ---
 
@@ -12,15 +12,16 @@
 
 1. [What you are building](#what-you-are-building)
 2. [How it works](#how-it-works)
-3. [The two programs](#the-two-programs)
+3. [The software](#the-software)
 4. [Parts](#parts)
 5. [Installation](#installation)
 6. [Build and run](#build-and-run)
 7. [Mechanics](#mechanics)
 8. [Type letters](#type-letters)
-9. [capture.py reference](#capturepy-reference)
-10. [Arduino cheat sheet](#arduino-cheat-sheet)
-11. [Done when](#done-when)
+9. [capture.py UI](#capturepy-ui)
+10. [capture.py reference](#capturepy-reference)
+11. [Arduino cheat sheet](#arduino-cheat-sheet)
+12. [Done when](#done-when)
 
 ---
 
@@ -79,36 +80,22 @@ Item codes match the [parts list](#parts): **E** is electronics, **M** is mechan
 
 The magnet must be a **diametric** disc (the poles sit on opposite sides of the face, not on the two flat faces). It lives on the **bottom tip** of the shaft, 1–3 mm above the black chip on the AS5600. The shaft goes through the bearing only, not through the magnet.
 
-Printed dials (print at 100%, no fit-to-page) are in `docs/base-templates/`. Sizes run from 6" to 10". **A** is at north. Letters run clockwise, A–Z then 0–9. The letters sit **outside** the cut circle. 6" and 7" are letter size; 8", 9", and 10" are tabloid (11×17).
-
-Each size has several layouts (example names are the 6" files):
-
-| File | Layout |
-|------|--------|
-| `dial-6in.pdf` | Spokes from the center to each character |
-| `dial-6in-nolines.pdf` | Letters only, no spokes |
-| `dial-6in-big.pdf` | Larger letters, with spokes |
-| `dial-6in-big-nolines.pdf` | Larger letters, no spokes |
-| `dial-6in-box.pdf` | A small box just **before** each character — point the needle into the box |
-| `dial-6in-big-box.pdf` | Larger letters plus aiming boxes |
-
-The `-box` files are the easiest to aim: the box sits on the rim, in line with the letter, so you can see when the pointer is on that character.
+Unlike a clock hand, the needle does not have to point at a printed letter. `capture.py` only reads how far and which way it turned since the last check — the on-screen grid, not the disc, shows which character is selected. That means there is no dial to print, mark, or calibrate; the wooden circle (M04) just gives the needle something to spin over and a comfortable, steady base.
 
 ### Repository layout
 
 ```
 medium-device/
   README.md
-  docs/                diagrams, photos
-  docs/base-templates/ printable dials (6–10 in, several layouts)
+  docs/                diagrams, photos, UI screenshot
   firmware/            Arduino sketches (open these in Arduino IDE only)
-  host/                Python capture program
+  host/                Python capture program (capture.py, words.py)
   logs/                created at runtime
 ```
 
 ---
 
-## The two programs
+## The software
 
 You use **two different tools**. They are not interchangeable.
 
@@ -188,9 +175,9 @@ E03 is a **solid disc** (usually no hole). Glue it on the shaft **tip**. The sha
 Before you wire anything, install the two programs this project depends on:
 
 1. **Arduino IDE** — used later to compile the sketch and write it onto the Nano.
-2. **Python 3** with the **pyserial** library — used later to read the Nano and type letters.
+2. **Python 3** with the **pyserial** and **pygame** (or **pygame-ce**) libraries — used later to read the Nano and run the on-screen typing window.
 
-Spoken letters (`--sound`) are optional. If you want them, install a speech engine as well. Everything below is offline and needs no account.
+Spoken letters (Speak letters / `--sound`) are optional. If you want them, install a speech engine as well. Everything below is offline and needs no account.
 
 This project runs on a **Windows PC, a Mac, or a Linux computer**. It does not run on an iPhone or iPad.
 
@@ -200,10 +187,10 @@ Plug the Nano in only after the software is installed, so you can confirm the co
 
 1. Install [Arduino IDE](https://www.arduino.cc/en/software) (2.x is fine). Use the installer from the Arduino site.
 2. Install [Python 3](https://www.python.org/downloads/). On the first installer page, tick **Add python.exe to PATH**.
-3. Open **Command Prompt** or **PowerShell** in this repository and install pyserial:
+3. Open **Command Prompt** or **PowerShell** in this repository and install pyserial and pygame:
 
    ```bat
-   python -m pip install pyserial
+   python -m pip install pyserial pygame-ce
    ```
 
    A virtual environment is optional but tidy:
@@ -224,10 +211,10 @@ If no COM port appears: install a **CH340** USB-serial driver, unplug and replug
 
 1. Install [Arduino IDE](https://www.arduino.cc/en/software) (2.x is fine).
 2. Install Python 3 if the Mac does not already have it. [python.org](https://www.python.org/downloads/) or Homebrew (`brew install python`) both work.
-3. Open **Terminal** in this repository and install pyserial:
+3. Open **Terminal** in this repository and install pyserial and pygame:
 
    ```bash
-   python3 -m pip install pyserial
+   python3 -m pip install pyserial pygame-ce
    ```
 
    Or use a virtual environment:
@@ -247,24 +234,24 @@ If no port appears, install a **CH340** driver for macOS, then unplug and replug
 ### Linux
 
 1. Install [Arduino IDE](https://www.arduino.cc/en/software) (2.x is fine). Many distributions also package it; either source is fine as long as you can open the application and pick **Arduino Nano**.
-2. Install Python 3 and pyserial. Prefer the distribution package, or a virtual environment. Do not fight the system installer with a bare `pip install` if it refuses (PEP 668).
+2. Install Python 3, pyserial, and pygame. Prefer the distribution package, or a virtual environment. Do not fight the system installer with a bare `pip install` if it refuses (PEP 668).
 
    **Arch / Manjaro**
 
    ```bash
-   sudo pacman -S python-pyserial
+   sudo pacman -S python-pyserial python-pygame
    ```
 
    **Debian / Ubuntu**
 
    ```bash
-   sudo apt install python3-serial
+   sudo apt install python3-serial python3-pygame
    ```
 
    **Fedora**
 
    ```bash
-   sudo dnf install python3-pyserial
+   sudo dnf install python3-pyserial python3-pygame
    ```
 
    **Any distribution, isolated in this repo**
@@ -586,27 +573,24 @@ a=48.1
 a=90.2
 ```
 
-**In the terminal** (needs Python and pyserial from [Installation](#installation))
+**In the terminal** (needs Python and pyserial/pygame from [Installation](#installation))
 
-From the repository root:
+`capture.py` does not print raw angles; it opens the on-screen grid and steps the highlighted cell as the needle turns. That is still a full, real test of the wiring:
 
 ```bash
-python host/capture.py --all
+python host/capture.py
 # or, if several ports exist:
-# python host/capture.py --all --port COM3
-# python host/capture.py --all --port /dev/ttyUSB0
+# python host/capture.py --port COM3
+# python host/capture.py --port /dev/ttyUSB0
 ```
 
-Turn the magnet. After upload you should see `filter: hyst=2lsb …` once, then changing lines:
+1. Click **Start Capture** (or press **P**). The highlight starts on **A**.
+2. Turn the magnet a little. The highlight should step to the next or previous cell each time you cross about `--step` degrees (10° by default).
+3. No hardware yet? `python host/capture.py --demo` runs the same window without a Nano — drag the mouse sideways, or use the **←/→** arrow keys, to step through the grid instead.
 
-```text
-a=47.28    (turn the magnet — this number should move)
-a=90.14    (turn the magnet — this number should move)
-```
+**Ctrl+C** in the terminal, or the **Exit** button, closes the program.
 
-**Ctrl+C** stops the Python program.
-
-A full turn should cover about 0–360 (or wrap 359 → 0).
+For a plain numeric readout instead, use Arduino IDE's Serial Monitor (above) — that talks straight to the Nano and does not need Python at all.
 
 ### If you see `scan: none` — run the wire check
 
@@ -615,7 +599,7 @@ Software cannot always name one open wire (I2C needs VCC, GND, SDA, and SCL). Th
 1. Keep VCC, GND, SDA, SCL, and **DIR → GND** as usual.
 2. Add one extra jumper if the module has **OUT** (diagnosis only): **AS5600 OUT → Nano A0**.
 3. Arduino IDE → **File → Open** → `firmware/wire_check/wire_check.ino` → **Upload**.
-4. Watch Serial Monitor at **115200**, or run `python host/capture.py --all`.
+4. Watch Serial Monitor at **115200**.
 5. Read the **Verdict** line.
 
 | Verdict | Meaning |
@@ -631,7 +615,7 @@ When the check is done, upload `needle_angle_stream.ino` again. Leave the OUT ju
 
 | You see | Meaning | What to do |
 |---------|---------|------------|
-| `a=123.4` changing as you turn | Success | Stop here; go on to the wooden dial |
+| `a=123.4` changing as you turn | Success | Stop here; go on to the needle assembly |
 | `a=ERR` over and over | I2C fail: wiring or power | Recheck VCC/GND/SDA/SCL; 5V vs 3.3V |
 | `a=` stuck on one number | Magnet too far, off-chip, or axial (wrong type) | Center a diametric magnet 1–3 mm over the IC |
 | Blank Serial Monitor | Wrong baud or port | 115200; same port as Upload |
@@ -639,7 +623,7 @@ When the check is done, upload `needle_angle_stream.ino` again. Leave the OUT ju
 | No port / permission denied | Driver (Windows/macOS) or serial group (Linux) | See [Installation](#installation) |
 
 **Pass criterion:** angles change smoothly when you rotate E03.  
-**Do not assemble the wood dial until this passes.**
+**Do not assemble the spinning needle until this passes.**
 
 ---
 
@@ -671,74 +655,45 @@ You need the bearing, shaft, balsa, wood circle, glue, and the small screw-and-n
 2. Fit **M01** in the center of **M04**. Put **M02** through **M01** (shaft through the bearing only).
 3. Glue **E03** with **M05a** on the **bottom tip** of M02, centered. Gap to the E01 chip: **1–3 mm**.
 4. Glue **M03** on the **top** of M02. Put **M05b** (screw and nut) on the short end; add or remove nuts until the needle stays put at any angle.
-5. Mark **A–Z** then **0–9** every **10°** on M04 (36 sectors), or print one of the dials in `docs/base-templates/`. The needle must not scrape the face.
-6. Reconnect USB and confirm the angle still changes when the needle turns.
+5. Marking letters on **M04** is optional — `capture.py` shows the character grid on screen, not on the disc. A simple mark (or nothing at all) is fine; just make sure the needle can spin freely and does not scrape the face.
+6. Reconnect USB and confirm the angle still changes when the needle turns (see [Build and run](#build-and-run)).
 
 ---
 
 ## Type letters
 
-The Nano only sends `a=123.4`. Python turns that into A–Z and 0–9.
+The Nano only sends `a=123.4`. Python turns that into a moving highlight over a grid of characters, and holding still on one types it. There is no calibration step — plug in and run.
 
 You need:
 
 - Firmware already uploaded and streaming
-- Python 3 and pyserial, from [Installation](#installation)
-- A finished wooden dial, or at least 36 marks you can point at
-- For `--sound`, a speech engine from the same install section
-
-**Once:** save the real sensor angle of every printed letter.  
-**Every day:** confirm A, J, S, 1, then type.
-
-### First time — `--calibrate`
-
-```bash
-python host/capture.py --calibrate
-```
-
-1. Point at **A**, tap space. Then **B**, **C**, … **Z**, **0**–**9**, going **clockwise**.
-2. Wait until the live number **changes** before each tap. Sit on the tick, not past it.
-3. A tap that goes backward or lands on an earlier letter is rejected. If two taps are on the same angle, the previous two letters are redone once; if they are still close, that reading is saved.
-4. All 36 angles are written to `host/config.json`. Nothing is typed in this mode.
-   The previous `config.json` is copied first to `host/config-backups/config_YYYY_MM_DD_HH_MM.json`.
-
-Redo `--calibrate` if you remount the magnet, reprint the dial, or letters stay wrong after a normal session.
-
-List or put an old map back (no Nano needed):
-
-```bash
-python host/capture.py --restore              # list backups
-python host/capture.py --restore latest       # newest backup → config.json
-python host/capture.py --restore config_2026_08_16_21_56.json
-```
-
-`--restore` copies the current live file into `config-backups/` before overwriting it.
-
-### Every session — no flags
+- Python 3, pyserial, and pygame (or pygame-ce), from [Installation](#installation)
+- The needle assembled and free to spin (see [Mechanics](#mechanics))
+- For **Speak letters**, a speech engine from the same install section
 
 ```bash
 python host/capture.py
-# or, speak each typed letter:
+# or, speak each typed letter/word:
 python host/capture.py --sound
+# no hardware yet? drag the mouse or use ←/→ instead of the needle:
+python host/capture.py --demo
 ```
 
-Needs a finished `--calibrate` first.
+1. The window opens **paused**, highlighting **A**. Click **Start Capture** (or press **P**).
+2. Turn the needle a little clockwise to move the highlight to the next cell, or counter-clockwise for the previous one. The grid wraps letters, then digits, then the control keys (␣, ✓, ⌫, ↵) on the right of each row.
+3. **Hold still** on a cell for the selected delay (default 1 s, see [capture.py UI](#capturepy-ui)) to select it:
+   - A **letter or digit** is added to the *current word* box in the middle of the screen.
+   - **␣ (space)** commits the word you actually typed and starts a new one.
+   - **✓ (complete)** takes the autocomplete suggestion shown in the current-word box instead of typing the rest of the word.
+   - **⌫ (backspace)** undoes the last letter, or drops an offered autocomplete suggestion first.
+   - **↵ (enter)** commits the current word and starts a new line.
+4. Typed text appears in the panel below, with automatic word wrap; scroll it with the mouse wheel to review earlier text.
 
-1. Point at **A** (top), tap. Then **J** (right), **S** (bottom), **1** (left).
-2. The live line shows `need 63°` (example) — wait until the number is near that saved mark, then tap. J and S at the same angle are refused.
-3. The live line says **ready** / `tap space, then move`. Tap space. Capture does **not** start on the letter you are on (usually **1**). Move the needle first; the timer shows `move` until you leave that letter. Then hold a letter about **1 second** to type. Hold in the **3.5° gap** between letters to type a space.
+Logs are written continuously as you type, under `logs/`: `Session_YYYY_MM_DD_HH_MM.txt` (the plain transcript) and the matching `.log` (one line per keystroke, with a timestamp and the raw angle — useful if a letter ever looks wrong).
 
-```text
- 328.1° A    0.7s | HELLO
-```
+### Speak each letter — Speak letters / `--sound`
 
-Angle, current letter, hold timer, text so far. After a letter prints the timer shows `ok` — move off it before the next one. A new line starts after 60 characters.
-
-Logs: `logs/Session_YYYY_MM_DD_HH_MM.txt` (letters) and `.log` (letters + angles).
-
-### Speak each letter — `--sound`
-
-Add `--sound` to the daily typing command. After a letter (or space) types, the computer says it out loud. Other modes (`--calibrate`, `--debug`, `--all`, …) do not speak.
+Turn on **Speak letters** in the window (or pass `--sound` on the command line). After a letter, digit, or word types, the computer says it out loud.
 
 ```bash
 python host/capture.py --sound
@@ -746,31 +701,39 @@ python host/capture.py --sound
 
 - Letters are spoken as-is (`A`, `B`, …).
 - Digits are words (`zero` … `nine`).
-- A gap types a space and says **space**.
+- A completed word is spoken as a whole.
 
-Install a speech package **once**, in [Installation](#installation). If no speech engine is found, typing still works and the program prints `No speech engine`.
+Install a speech package **once**, in [Installation](#installation). If no speech engine is found, typing still works; the program just stays quiet.
 
-### If something looks wrong
+### Typing in a language other than English
 
-| Symptom | Command |
-|---------|---------|
-| Want to see the raw angle only | `--debug` |
-| Letter is consistently wrong | `--diagnostic` (then send the log) |
-| Magnet / chip not seeing a full turn | `--span` |
-| No `a=…` at all | `--all` |
+The autocomplete dictionary is English. Turn off the **Auto-complete** checkbox for any other language (or for names, code, etc.) — every held letter is then typed exactly as aimed, with no suggestion or ✓ completion.
 
-### End-to-end check
+---
 
-1. `python host/capture.py --calibrate` — all 36 ticks, clockwise.
-2. `python host/capture.py` — A, J, S, 1 (wait for `need …°`), then **ready**. Tap space, **move** the needle, then hold a letter.
-3. Capture ignores the letter you were on (usually **1**) until you move. Then hold about 1 s → **one** character. The timer shows `move`, then counts up, then `ok`.
-4. Move to the next letter and hold. After 60 characters a new line starts.
+## capture.py UI
+
+![capture.py window](docs/capture.png)
+
+| # | Element | What it does |
+|---|---------|--------------|
+| 1 | **Character grid** (left) | Letters A–Z, then digits 0–9, ten per row. The gold-outlined cell is the current highlight; it steps to the next/previous cell as the needle turns. **J**, **S**, and **1** are drawn in red only as visual row landmarks — they are not special keys. |
+| 2 | **␣ / ✓ / ⌫ / ↵ column** | Four control keys at the end of every row, the same size as a letter cell: space (commit the typed word), complete (accept the autocomplete suggestion), backspace (undo), enter (commit the word and start a new line). |
+| 3 | **Current word** box | Shows the word being aimed — in gold while a hold is filling, in white once idle. A muted "ghost" tail shows the rest of an autocomplete match; a small `→ suggestion` line appears underneath when the match is not a simple prefix. |
+| 4 | **Transcript** panel | Everything already typed, word-wrapped to the window width. Scroll with the mouse wheel when there is more text than fits; a thin scrollbar appears on the right edge when scrolled. |
+| 5 | **Start Capture / Pause Capture** | Starts or pauses reading the needle (also **P**). Starting always highlights **A** first; nothing types until the needle actually moves. |
+| 6 | **Reverse direction** | Flips which way is "next" vs. "previous" (also **I**), for a needle mounted upside down or a reversed sensor. |
+| 7 | **Speak letters** | Toggles spoken feedback (also **Ctrl+S**); see [Speak each letter](#speak-each-letter--speak-letters----sound). |
+| 8 | **Clear text** | Clears only the on-screen transcript. The saved `Session_*.txt` log file is never rewritten or shortened by this button — nothing already logged is lost. |
+| 9 | **Delay to Capture (seconds)** | How long the needle must sit still on a cell before it is selected: **0.5, 0.7, 1, 1.5, 2, 3** seconds. |
+| 10 | **Auto-complete** checkbox | Turns the English dictionary suggestions and the ✓ key on or off; see [Typing in a language other than English](#typing-in-a-language-other-than-english). |
+| 11 | **Exit** | Closes the program (also the window's close button, or **Esc**). |
+
+The bottom-left corner of the window always shows where the current session's logs are being written.
 
 ---
 
 ## capture.py reference
-
-Firmware prints `a=…`. Python is `host/capture.py`. One mode at a time.
 
 ```bash
 python host/capture.py --help
@@ -778,75 +741,33 @@ python host/capture.py --help
 
 On Windows, `python` is the usual command. On macOS and some Linux installs it is `python3`. If you created a virtual environment, activate it first.
 
-### Modes
+### Options
 
-| Flag | When to use | What happens |
-|------|-------------|--------------|
-| *(none)* | Daily typing | Loads the 36-letter map. Confirm **A, J, S, 1**. Tap **ready**, then **move** the needle. Types a character when that letter holds for `--delay` seconds. |
-| `--calibrate` | First time, or after a hardware change | Walk **A–Z, 0–9**. Save every raw angle in `host/config.json`. Copies the old file to `host/config-backups/` first. Does **not** type. |
-| `--restore` | Undo a calibrate | List backups, or copy one back over `config.json`. No USB needed. `latest` = newest. |
-| `--debug` | Line up the base | Live angle only. Rotate the **base** (needle on A) until A is where you want north. Ctrl+C to stop. |
-| `--diagnostic` | Letters are off | Confirm A, J, S, 1. Point at a printed letter, **Enter**, type that letter, Enter. Repeat. Ctrl+C writes a summary to `logs/Diagnostic_*.log` (raw angle, saved map, predicted letter, error). |
-| `--all` | Check the firmware | Print **every** raw `a=…` sample. No letters. |
-| `--stream` | Same, but quieter | Print a new line only when the angle moves a lot (see `--change-pct`). |
-| `--span` | Check the magnet | Record min/max while you turn a full circle. Span ≥ 300° is good. |
+| Flag | Default | What it does |
+|------|---------|--------------|
+| `--port` | first `/dev/ttyUSB*`, `/dev/ttyACM*`, or macOS `cu.usbserial*` | USB port. Example: `--port COM3` or `--port /dev/ttyUSB0`. |
+| `--baud` | `115200` | Must match the sketch. |
+| `--delay` | `1.0`, from `host/config.json` | Seconds the needle must hold still before a character is captured. Also changeable live from the **Delay to Capture** picker in the window (that choice is saved back to `config.json`). |
+| `--wrap` | `60`, from `host/config.json` | New line after this many characters in the saved transcript. |
+| `--invert` | off, or from `config.json` | Start with direction reversed. Also toggled live with **Reverse direction** / **I**. |
+| `--sound` | off | Start with **Speak letters** on. |
+| `--demo` | off | No Nano needed: drag the mouse sideways, or press **←/→**, to move the highlight instead of turning the needle. |
+| `--step` | `10.0` | Degrees of needle rotation needed to move one cell (space, backspace, complete, and enter count the same as a letter). |
+| `--log-dir` | `logs/` at the repo root | Where `Session_*.txt` / `Session_*.log` are written. |
 
-### Serial (any mode)
-
-| Option | Default | What it does |
-|--------|---------|--------------|
-| `--port` | first `/dev/ttyUSB*`, `/dev/ttyACM*`, or macOS `cu.usbserial*` | USB port. Example: `--port COM3` or `--port /dev/ttyUSB0` |
-| `--baud` | `115200` | Must match the sketch |
-
-### Typing (default mode)
-
-| Option | Default | What it does |
-|--------|---------|--------------|
-| `--delay` | `1.0` (saved as `delay_s`) | Seconds the **same letter** must stay on screen before it types. Analog jitter is fine; changing letter resets the timer. |
-| `--wrap` | `60` (saved as `wrap_cols`) | New line after this many characters. |
-| `--invert` | off | Force reverse direction. Normally taken from `--calibrate`. |
-| `--sound` | off | Speak each typed letter or “space” (daily typing only). Needs a speech engine from [Installation](#installation). Offline, no account. |
-| `--log-dir` | `logs/` at the repo root | Where `Session_*.txt` / `Session_*.log` go. |
-
-`--delay` and `--wrap` are stored in `host/config.json`. They do **not** overwrite the 36 letter marks.
-
-`--still-tol` and `--move-deg` are leftover flags. Typing does not use them.
-
-### Stream / span
-
-| Option | Default | What it does |
-|--------|---------|--------------|
-| `--change-pct` | `10` (36°) | With `--stream`, new line when the angle moves this percent of a turn. Changing this from 10 also switches to stream mode. |
-| `--span-seconds` | `12` | How long `--span` records. |
-
-### What is saved (`host/config.json`)
-
-`--calibrate` writes the 36 letters plus `invert`. A normal session only **reads** that file and measures A, J, S, 1 to line the map up with today’s base pose.
-
-```text
---calibrate     save A=327.4, B=338.1, … 9=317.4
-python capture  measure A, J, S, 1
-                stretch the saved 36 marks onto those four
-                letter = nearest saved mark, or space in the 3.5° gaps
-                type when that letter (or space) holds ~1 s
-```
+`--delay`, `--wrap`, and `--invert` read their default from `host/config.json` and are only overridden for that run when the flag is passed; picking a new delay in the window updates `config.json` for next time.
 
 ### Examples
 
 ```bash
 python host/capture.py --help
-python host/capture.py --calibrate       # once: save all 36 letters (backs up the old file)
-python host/capture.py --restore         # list saved maps
-python host/capture.py --restore latest  # put the previous map back
-python host/capture.py                   # daily: A J S 1, then type
-python host/capture.py --debug           # raw angle; rotate the base
-python host/capture.py --diagnostic      # Enter + true letter → Diagnostic_*.log
-python host/capture.py --sound           # speak each letter
-python host/capture.py --delay 1.5       # hold a bit longer before it types
+python host/capture.py                    # normal run: needle + on-screen grid
+python host/capture.py --demo             # try the UI without any hardware
+python host/capture.py --sound            # speak each typed letter/word
+python host/capture.py --delay 1.5        # hold a bit longer before it types
 python host/capture.py --wrap 40
 python host/capture.py --port COM3
-python host/capture.py --all             # every raw a=…
-python host/capture.py --span            # full-circle min/max
+python host/capture.py --step 6           # smaller needle turns select the next cell
 ```
 
 ---
@@ -863,7 +784,7 @@ The `.ino` is opened and uploaded **only** in Arduino IDE. Python is only `host/
 | Choose USB port | Tools → Port |
 | Send the program to the Nano | Upload button (→) |
 | See `a=…` in the IDE | Tools → Serial Monitor, baud **115200** |
-| See `a=…` in the terminal | `python host/capture.py --all` **after** Upload succeeds |
+| See it move the on-screen grid | `python host/capture.py` **after** Upload succeeds |
 
 I2C address of the AS5600 is `0x36`. Angle is 12-bit (0–4095) → degrees = `raw * 360 / 4096`. Firmware writes CONF (hysteresis 2 LSB, slow filter 16×), reads the filtered ANGLE register (`0x0E`), and prints the mean of 8 samples as `a=123.45`.
 
@@ -872,16 +793,16 @@ I2C address of the AS5600 is `0x36`. Angle is 12-bit (0–4095) → degrees = `r
 ## Done when
 
 - [ ] Nano port appears; firmware uploads
-- [ ] Serial Monitor or `capture.py --all` shows `a=…` changing when the magnet or needle turns
+- [ ] Serial Monitor shows `a=…` changing when the magnet or needle turns
 - [ ] Needle is free and balanced
-- [ ] Letter ring is on M04
-- [ ] Holding a letter prints one character
+- [ ] `python host/capture.py` opens and turning the needle moves the on-screen highlight
+- [ ] Holding a cell types one character
 - [ ] A log file grows in `logs/`
 
 ### Reproduce from scratch
 
 1. Buy the items list; solder Nano headers if needed; get a Mini-B **data** cable if the pack has none.
-2. Install Arduino IDE, Python, and pyserial for your operating system. Confirm the USB port.
+2. Install Arduino IDE, Python, pyserial, and pygame for your operating system. Confirm the USB port.
 3. Five wires (including DIR→GND), magnet over the chip, upload the sketch, watch 115200 serial.
-4. Bearing, shaft, magnet on the **end**, needle, letters.
-5. `python host/capture.py --calibrate` once, then `python host/capture.py` each session (A, J, S, 1, hold to type).
+4. Bearing, shaft, magnet on the **end**, needle.
+5. `python host/capture.py` — click **Start Capture**, turn the needle to move the highlight, hold a cell to type it.
