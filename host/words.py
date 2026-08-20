@@ -16,12 +16,15 @@ MIN_FUZZY_LETTERS = 2
 
 
 class _Node:
-    __slots__ = ("kids", "best")
+    __slots__ = ("kids", "best", "word", "rank")
 
     def __init__(self) -> None:
         self.kids: dict[str, _Node] = {}
         # Most frequent word that passes through this node (lowest rank).
         self.best: str | None = None
+        # Set only on the node where a word ends (its own frequency rank).
+        self.word: str | None = None
+        self.rank: int = 0
 
 
 class WordIndex:
@@ -38,6 +41,7 @@ class WordIndex:
         word = word.lower()
         if not word.isalpha():
             return
+        rank = len(self.words)
         if self.root.best is None:
             self.root.best = word
         node = self.root
@@ -49,6 +53,8 @@ class WordIndex:
             node = kid
             if node.best is None:
                 node.best = word
+        node.word = word
+        node.rank = rank
         self.words.append(word)
 
     def complete(self, prefix: str) -> str | None:
@@ -72,21 +78,44 @@ class WordIndex:
         return self._fuzzy(letters.lower())
 
     def _fuzzy(self, letters: str) -> str | None:
+        """Nearest dictionary word within MAX_FUZZY_DIST, walking the trie.
+
+        Scanning every one of the ~40,000 words with a Levenshtein check
+        (the old approach) is O(vocabulary size) on every call. Instead we
+        run the classic trie edit-distance search: track one Wagner-Fischer
+        DP row per node and stop descending into a subtree as soon as its
+        best possible distance already exceeds the budget. Wrong branches
+        (most of the alphabet, most of the time) are pruned after a couple
+        of letters instead of being fully scanned.
+        """
         n = len(letters)
         best: tuple[int, int, str] | None = None
-        lo, hi = n - MAX_FUZZY_DIST, n + MAX_FUZZY_DIST
-        for rank, word in enumerate(self.words):
-            if not (lo <= len(word) <= hi):
+        first_row = list(range(n + 1))
+        stack: list[tuple[_Node, str, list[int]]] = [
+            (kid, ch, first_row) for ch, kid in self.root.kids.items()
+        ]
+        while stack:
+            node, ch, prev_row = stack.pop()
+            row = [prev_row[0] + 1]
+            for i in range(1, n + 1):
+                cost = 0 if letters[i - 1] == ch else 1
+                row.append(
+                    min(
+                        row[i - 1] + 1,
+                        prev_row[i] + 1,
+                        prev_row[i - 1] + cost,
+                    )
+                )
+            if min(row) > MAX_FUZZY_DIST:
                 continue
-            dist = _bounded_levenshtein(letters, word, MAX_FUZZY_DIST)
-            if dist is None:
-                continue
-            cand = (dist, rank, word)
-            if best is None or cand < best:
-                best = cand
-                if dist == 1 and rank < 200:
-                    # Common word, one slip: good enough.
-                    break
+            if node.word is not None:
+                dist = row[n]
+                if dist <= MAX_FUZZY_DIST:
+                    cand = (dist, node.rank, node.word)
+                    if best is None or cand < best:
+                        best = cand
+            for kid_ch, kid in node.kids.items():
+                stack.append((kid, kid_ch, row))
         return None if best is None else best[2]
 
 
@@ -102,6 +131,8 @@ class WordDraft:
         self.index = index
         self.letters: list[str] = []
         self.pinned: str | None = None
+        self._sug_cache_key: str | None = None
+        self._sug_cache_val: str = ""
 
     @property
     def typed(self) -> str:
@@ -111,10 +142,19 @@ class WordDraft:
     def suggestion(self) -> str:
         if self.pinned is not None:
             return self.pinned
-        raw = self.index.closest(self.typed)
-        if raw:
-            return raw.upper()
-        return self.typed
+        typed = self.typed
+        # closest() can fall back to a fuzzy scan of every dictionary word
+        # (MAX_FUZZY_DIST). Properties get read several times per draw
+        # frame (60x/sec) by the GUI, so without this cache an unmatched
+        # prefix re-runs that whole-dictionary scan on every single frame
+        # for as long as the needle sits on it — the app grinds to a halt.
+        if self._sug_cache_key == typed:
+            return self._sug_cache_val
+        raw = self.index.closest(typed)
+        val = raw.upper() if raw else typed
+        self._sug_cache_key = typed
+        self._sug_cache_val = val
+        return val
 
     @property
     def ghost(self) -> str:
@@ -209,37 +249,6 @@ def take_last_word(chars: list[str]) -> str | None:
         word.append(chars.pop())
     word.reverse()
     return "".join(word)
-
-
-def _bounded_levenshtein(a: str, b: str, max_dist: int) -> int | None:
-    if a == b:
-        return 0
-    la, lb = len(a), len(b)
-    if abs(la - lb) > max_dist:
-        return None
-    if la > lb:
-        a, b, la, lb = b, a, lb, la
-    prev = list(range(la + 1))
-    for i, cb in enumerate(b, 1):
-        cur = [i] + [0] * la
-        row_min = i
-        for j, ca in enumerate(a, 1):
-            cost = 0 if ca == cb else 1
-            v = prev[j - 1] + cost
-            ins = cur[j - 1] + 1
-            if ins < v:
-                v = ins
-            delete = prev[j] + 1
-            if delete < v:
-                v = delete
-            cur[j] = v
-            if v < row_min:
-                row_min = v
-        if row_min > max_dist:
-            return None
-        prev = cur
-    dist = prev[la]
-    return dist if dist <= max_dist else None
 
 
 if __name__ == "__main__":
