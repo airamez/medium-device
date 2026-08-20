@@ -63,6 +63,7 @@ HILITE = (255, 214, 140)
 SPACE_FILL = (214, 206, 190)
 BS_FILL = (236, 214, 208)
 COMPLETE_FILL = (208, 228, 210)
+ENTER_FILL = (206, 216, 232)
 WORD_CARD = (52, 46, 40)
 WORD_CARD_INNER = (32, 28, 24)
 TEXT_BG = (28, 24, 22)
@@ -80,10 +81,11 @@ WIN_W, WIN_H = 1440, 900
 FPS = 60
 DEFAULT_STEP_DEG = 10.0  # equal needle travel per cell; not limited to 360/N
 DELAY_CHOICES = (1, 2, 3)
-CONTENT_COLS = 5  # letters/digits per line
+CONTENT_COLS = 10  # letters/digits per line
 # Stable tokens — not ASCII \\b/\\t, which some paths treat as controls and drop.
 BS = "⌫"
 ACCEPT = "✓"
+ENTER = "↵"
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 DIGITS = "0123456789"
 
@@ -103,9 +105,9 @@ def _center_pad(chars: list[str], n: int) -> list[str | None]:
 
 
 def _rows_with_ends(seq: str, n: int) -> list[list[str | None]]:
-    """Each line is: up to n characters (centered), then space, complete, backspace."""
+    """Each line is: up to n characters (centered), then space, complete, backspace, enter."""
     return [
-        _center_pad(list(part), n) + [" ", ACCEPT, BS] for part in _chunk(seq, n)
+        _center_pad(list(part), n) + [" ", ACCEPT, BS, ENTER] for part in _chunk(seq, n)
     ]
 
 
@@ -113,7 +115,7 @@ LETTER_ROWS = _rows_with_ends(LETTERS, CONTENT_COLS)
 DIGIT_ROWS = _rows_with_ends(DIGITS, CONTENT_COLS)
 GRID_ROWS = LETTER_ROWS + DIGIT_ROWS
 KEYS = [ch for row in GRID_ROWS for ch in row if ch is not None]
-ROW_CELLS = CONTENT_COLS + 3  # chars ␣ ✓ ⌫
+ROW_CELLS = CONTENT_COLS + 4  # chars ␣ ✓ ⌫ ↵
 
 
 class AnglePump:
@@ -249,6 +251,9 @@ class LinearCaptureGui:
         self._typed_rev = 0
         self._wrap_cache_key: tuple[int, int] | None = None
         self._wrap_cache_lines: list[str] = []
+        self.scroll_offset = 0
+        self._output_max_lines = 1
+        self._output_max_chars = 8
         self.lexicon = w.load_index()
         self.draft = w.WordDraft(self.lexicon)
         self.txt_path: Path | None = None
@@ -262,6 +267,7 @@ class LinearCaptureGui:
         self.btn_reverse = Button("Reverse direction", toggle=True)
         self.btn_sound = Button("Speak letters", toggle=True)
         self.btn_clear = Button("Clear text")
+        self.btn_exit = Button("Exit")
         self.btn_reverse.on = self.invert
         self.btn_sound.on = self.sound
         self.buttons = [
@@ -269,6 +275,7 @@ class LinearCaptureGui:
             self.btn_reverse,
             self.btn_sound,
             self.btn_clear,
+            self.btn_exit,
         ]
 
         if not pygame.get_init():
@@ -287,7 +294,6 @@ class LinearCaptureGui:
         self.text_box = pygame.Rect(0, 0, 0, 0)
         self.word_box = pygame.Rect(0, 0, 0, 0)
         self.log_label_rect = pygame.Rect(0, 0, 0, 0)
-        self.toolbar_rect = pygame.Rect(0, 0, 0, 0)
         self.panel_rect = pygame.Rect(0, 0, 0, 0)
         self.grid_origin = (0, 0)
         self.cell = 64
@@ -307,13 +313,11 @@ class LinearCaptureGui:
         panel_w = max(200, min(260, int(w * 0.18)))
         self.panel_rect = pygame.Rect(w - panel_w, 0, panel_w, h)
         content_w = w - panel_w
-        toolbar_h = 58
         word_h = 92
         log_h = 22
-        text_h = max(72, int(h * 0.14))
+        text_h = max(160, int(h * 0.28))
         footer = word_h + text_h + log_h + 28
-        top = toolbar_h
-        self.toolbar_rect = pygame.Rect(0, 0, content_w, toolbar_h)
+        top = 10
         grid_w = content_w - 40
         grid_h = max(120, h - top - footer)
         n_rows = len(GRID_ROWS)
@@ -371,6 +375,7 @@ class LinearCaptureGui:
         ):
             btn.place(px, by, pw, bh)
             by += bh + gap_b
+        self.btn_exit.place(px, self.panel_rect.bottom - pad - bh, pw, bh)
         by += 8
         self.delay_label_pos = (px, by)
         by += 22
@@ -517,11 +522,15 @@ class LinearCaptureGui:
             self.line += ch
             self.typed.append(ch)
             self.write_out(ch)
+            if ch == "\n":
+                self.line = ""
+                continue
             if c.should_wrap_line(self.line, ch, self.wrap_cols):
                 self.line = ""
                 self.typed.append("\n")
                 self.write_out("\n")
         self._typed_rev += 1
+        self.scroll_offset = 0
 
     def emit_backspace(self) -> bool:
         changed = w.delete_current_word(self.draft, self.typed)
@@ -530,6 +539,7 @@ class LinearCaptureGui:
         self._typed_rev += 1
         self._refresh_line()
         self.rewrite_txt()
+        self.scroll_offset = 0
         self.write_log("BS")
         if self.sound:
             c.speak_glyph("\b")
@@ -551,6 +561,9 @@ class LinearCaptureGui:
     def _is_backspace(self, char: str) -> bool:
         return char in (BS, "\b")
 
+    def _is_enter(self, char: str) -> bool:
+        return char in (ENTER, "\n")
+
     def emit(self, char: str) -> None:
         if self._is_backspace(char):
             self.emit_backspace()
@@ -560,6 +573,17 @@ class LinearCaptureGui:
         elif char == " ":
             word = self.draft.take_typed()
             self._commit_word(word, via="space")
+        elif self._is_enter(char):
+            word = self.draft.take_typed()
+            if word:
+                self._append_committed(word)
+                self.write_log(f"SP  {word}")
+                if self.sound:
+                    c.speak_glyph(word)
+            self._append_committed("\n")
+            self.write_log("NL")
+            if self.sound:
+                c.speak_glyph("\n")
         else:
             self.draft.add(char)
             self.write_log(c.log_glyph(char))
@@ -645,6 +669,14 @@ class LinearCaptureGui:
         if event.type == pygame.VIDEORESIZE:
             self.layout(event.w, event.h)
             return False
+        if event.type == pygame.MOUSEWHEEL:
+            if self.text_box.collidepoint(pygame.mouse.get_pos()):
+                lines = self._wrapped_lines(self._output_max_chars)
+                max_scroll = max(0, len(lines) - self._output_max_lines)
+                self.scroll_offset = max(
+                    0, min(max_scroll, self.scroll_offset + event.y * 3)
+                )
+            return False
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 return True
@@ -670,6 +702,8 @@ class LinearCaptureGui:
         if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
             return False
         pos = event.pos
+        if self.btn_exit.hit(pos):
+            return True
         if self.btn_pause.hit(pos):
             self.set_paused(not self.paused)
         elif self.btn_reverse.hit(pos):
@@ -684,6 +718,7 @@ class LinearCaptureGui:
             self._typed_rev += 1
             self.draft.clear()
             self.rewrite_txt()
+            self.scroll_offset = 0
         elif self._hit_delay(pos):
             pass
         elif not self.paused:
@@ -712,7 +747,7 @@ class LinearCaptureGui:
             self.win_size = size
             self.layout(*size)
         surf.fill(BG)
-        self._draw_toolbar(surf)
+        self._draw_panel(surf)
         self._draw_grid(surf)
         self._draw_word_box(surf)
         self._draw_output(surf)
@@ -765,6 +800,19 @@ class LinearCaptureGui:
                     border_radius=8,
                 )
                 self._draw_complete_glyph(surf, rect, OK if not on else INK)
+                if on and not self.paused:
+                    self._draw_hold_meter(surf, rect, now)
+            elif ch == ENTER:
+                fill = GOLD if (on and flashing) else (HILITE if on else ENTER_FILL)
+                pygame.draw.rect(surf, fill, rect, border_radius=8)
+                pygame.draw.rect(
+                    surf,
+                    GOLD if on else MUTED,
+                    rect,
+                    width=4 if on else 2,
+                    border_radius=8,
+                )
+                self._draw_enter_glyph(surf, rect, INK)
                 if on and not self.paused:
                     self._draw_hold_meter(surf, rect, now)
             else:
@@ -841,6 +889,26 @@ class LinearCaptureGui:
         p3 = (rect.centerx + int(w * 0.26), rect.centery - int(h * 0.20))
         pygame.draw.lines(surf, color, False, [p1, p2, p3], width=max(4, w // 10))
 
+    def _draw_enter_glyph(
+        self, surf: pygame.Surface, rect: pygame.Rect, color: tuple[int, int, int]
+    ) -> None:
+        """Return-key hook: down then left, with an arrowhead at the end."""
+        w = rect.w
+        h = rect.h
+        thick = max(3, w // 14)
+        top_y = rect.centery - int(h * 0.18)
+        bot_y = rect.centery + int(h * 0.16)
+        right_x = rect.centerx + int(w * 0.20)
+        left_x = rect.centerx - int(w * 0.24)
+        pygame.draw.line(surf, color, (right_x, top_y), (right_x, bot_y), thick)
+        pygame.draw.line(surf, color, (right_x, bot_y), (left_x, bot_y), thick)
+        arrow = [
+            (left_x + int(w * 0.16), bot_y - int(h * 0.16)),
+            (left_x, bot_y),
+            (left_x + int(w * 0.16), bot_y + int(h * 0.16)),
+        ]
+        pygame.draw.lines(surf, color, False, arrow, width=thick)
+
     def _draw_slot_needle(
         self, surf: pygame.Surface, rect: pygame.Rect
     ) -> None:
@@ -871,19 +939,6 @@ class LinearCaptureGui:
         fill_h = max(3, int((rect.h - 20) * frac))
         meter = pygame.Rect(rect.x + 4, rect.bottom - 16 - fill_h, rect.w - 8, fill_h)
         pygame.draw.rect(surf, OK, meter, border_radius=4)
-
-    def _draw_toolbar(self, surf: pygame.Surface) -> None:
-        pygame.draw.rect(surf, PANEL, self.toolbar_rect)
-        pygame.draw.line(
-            surf,
-            PANEL_LINE,
-            (0, self.toolbar_rect.bottom),
-            (self.toolbar_rect.w, self.toolbar_rect.bottom),
-            2,
-        )
-        title = self.font_title.render("Medium Device", True, WHITE)
-        surf.blit(title, (20, 16))
-        self._draw_panel(surf)
 
     def _draw_panel(self, surf: pygame.Surface) -> None:
         pygame.draw.rect(surf, PANEL, self.panel_rect)
@@ -921,7 +976,7 @@ class LinearCaptureGui:
 
     def _draw_delay_radios(self, surf: pygame.Surface) -> None:
         lx, ly = self.delay_label_pos
-        surf.blit(self.font_small.render("Hold", True, MUTED), (lx, ly))
+        surf.blit(self.font_small.render("Delay to Capture", True, MUTED), (lx, ly))
         chosen = int(round(self.delay_s))
         for sec, rect in self.delay_hits:
             on = sec == chosen
@@ -959,6 +1014,8 @@ class LinearCaptureGui:
         cell_w = max(self.font_text.size("M")[0], 1)
         max_chars = max(8, area.w // cell_w)
         max_lines = max(1, area.h // line_h)
+        self._output_max_chars = max_chars
+        self._output_max_lines = max_lines
         if not self.typed:
             hint = self.font_ui.render(
                 "Entered words land here after space or complete (✓).",
@@ -968,14 +1025,22 @@ class LinearCaptureGui:
             surf.blit(hint, (area.x, area.y))
             return
         lines = self._wrapped_lines(max_chars)
-        visible = lines[-max_lines:]
+        total = len(lines)
+        max_scroll = max(0, total - max_lines)
+        if self.scroll_offset > max_scroll:
+            self.scroll_offset = max_scroll
+        end = total - self.scroll_offset
+        start = max(0, end - max_lines)
+        visible = lines[start:end]
+        at_bottom = self.scroll_offset == 0
         y = area.y
         last_x, last_y = area.x, y
         for li, line in enumerate(visible):
             x = area.x
             for ci, ch in enumerate(line):
                 hot = (
-                    li == len(visible) - 1
+                    at_bottom
+                    and li == len(visible) - 1
                     and ci == len(line) - 1
                     and time.time() < self.flash_until
                 )
@@ -995,10 +1060,28 @@ class LinearCaptureGui:
                 x += cell_w
             last_x, last_y = x, y
             y += line_h
-        if int(time.time() * 2) % 2 == 0 and not self.draft.typed:
+        if at_bottom and int(time.time() * 2) % 2 == 0 and not self.draft.typed:
             pygame.draw.rect(
                 surf, TEXT_FG, pygame.Rect(last_x + 1, last_y + 4, 3, line_h - 8)
             )
+        if max_scroll > 0:
+            self._draw_scrollbar(surf, area, total, max_lines, start)
+
+    def _draw_scrollbar(
+        self,
+        surf: pygame.Surface,
+        area: pygame.Rect,
+        total_lines: int,
+        max_lines: int,
+        start_line: int,
+    ) -> None:
+        track = pygame.Rect(area.right + 4, area.y, 6, area.h)
+        pygame.draw.rect(surf, PANEL_LINE, track, border_radius=3)
+        thumb_h = max(20, int(track.h * max_lines / total_lines))
+        max_start = max(1, total_lines - max_lines)
+        thumb_y = track.y + int((track.h - thumb_h) * (start_line / max_start))
+        thumb = pygame.Rect(track.x, thumb_y, track.w, thumb_h)
+        pygame.draw.rect(surf, MUTED, thumb, border_radius=3)
 
     def _draw_word_box(self, surf: pygame.Surface) -> None:
         card = self.word_box
