@@ -246,6 +246,9 @@ class LinearCaptureGui:
         self.hold_lock_angle: float | None = None
         self.typed: list[str] = []
         self.line = ""
+        self._typed_rev = 0
+        self._wrap_cache_key: tuple[int, int] | None = None
+        self._wrap_cache_lines: list[str] = []
         self.lexicon = w.load_index()
         self.draft = w.WordDraft(self.lexicon)
         self.txt_path: Path | None = None
@@ -285,6 +288,7 @@ class LinearCaptureGui:
         self.word_box = pygame.Rect(0, 0, 0, 0)
         self.log_label_rect = pygame.Rect(0, 0, 0, 0)
         self.toolbar_rect = pygame.Rect(0, 0, 0, 0)
+        self.panel_rect = pygame.Rect(0, 0, 0, 0)
         self.grid_origin = (0, 0)
         self.cell = 64
         self.gap = 8
@@ -300,15 +304,17 @@ class LinearCaptureGui:
         return KEYS[self.index]
 
     def layout(self, w: int, h: int) -> None:
+        panel_w = max(200, min(260, int(w * 0.18)))
+        self.panel_rect = pygame.Rect(w - panel_w, 0, panel_w, h)
+        content_w = w - panel_w
         toolbar_h = 58
-        status_h = 26
         word_h = 92
         log_h = 22
         text_h = max(72, int(h * 0.14))
         footer = word_h + text_h + log_h + 28
-        top = toolbar_h + status_h
-        self.toolbar_rect = pygame.Rect(0, 0, w, toolbar_h)
-        grid_w = w - 40
+        top = toolbar_h
+        self.toolbar_rect = pygame.Rect(0, 0, content_w, toolbar_h)
+        grid_w = content_w - 40
         grid_h = max(120, h - top - footer)
         n_rows = len(GRID_ROWS)
         n_letter_rows = len(LETTER_ROWS)
@@ -338,37 +344,41 @@ class LinearCaptureGui:
             y += pitch
         grid_bottom = y
 
-        ww = min(640, max(300, int(w * 0.5)))
+        ww = min(640, max(300, int(content_w * 0.5)))
         self.word_box = pygame.Rect(0, 0, ww, word_h)
-        self.word_box.centerx = w // 2
+        self.word_box.centerx = content_w // 2
         self.word_box.y = grid_bottom + 10
         self.text_box = pygame.Rect(
-            16, self.word_box.bottom + 10, w - 32, text_h
+            16, self.word_box.bottom + 10, content_w - 32, text_h
         )
         self.log_label_rect = pygame.Rect(
-            16, min(h - log_h - 4, self.text_box.bottom + 4), w - 32, log_h
+            16, min(h - log_h - 4, self.text_box.bottom + 4), content_w - 32, log_h
         )
 
-        bh = 40
-        by = 10
-        x = w - 16
-        for btn, bw in (
-            (self.btn_clear, 118),
-            (self.btn_sound, 138),
-            (self.btn_reverse, 168),
-            (self.btn_pause, 158),
+        # Right-side vertical control panel: buttons stacked top to bottom,
+        # then the Hold delay picker below them.
+        pad = 20
+        px = self.panel_rect.x + pad
+        pw = panel_w - pad * 2
+        bh = 46
+        gap_b = 12
+        by = pad
+        for btn in (
+            self.btn_pause,
+            self.btn_reverse,
+            self.btn_sound,
+            self.btn_clear,
         ):
-            x -= bw
-            btn.place(x, by, bw, bh)
-            x -= 8
-        delay_w = 132
-        x -= delay_w + 12
-        self.delay_label_pos = (x, 8)
+            btn.place(px, by, pw, bh)
+            by += bh + gap_b
+        by += 8
+        self.delay_label_pos = (px, by)
+        by += 22
         self.delay_hits = []
-        slot = delay_w // len(DELAY_CHOICES)
+        slot = pw // len(DELAY_CHOICES)
         for i, sec in enumerate(DELAY_CHOICES):
             self.delay_hits.append(
-                (sec, pygame.Rect(x + i * slot, 28, slot, 26))
+                (sec, pygame.Rect(px + i * slot, by, slot, 26))
             )
 
     def start_session_logs(self) -> None:
@@ -440,7 +450,15 @@ class LinearCaptureGui:
         self.rest.clear()
 
     def _follow_needle(self) -> None:
-        """Unwrapped travel: every cell (letter, space, backspace) is step_deg wide."""
+        """Unwrapped travel: every cell (letter, space, backspace) is step_deg wide.
+
+        travel_slot() only advances one cell per call (by design — see its
+        docstring), so a fast spin followed by a stop must be resolved to the
+        final slot within this same tick. Otherwise the on-screen letter
+        keeps stepping forward on later frames even though the needle has
+        already stopped, which looks like the indicator "jumping" after the
+        fact instead of tracking the needle in real time.
+        """
         if self.last_raw is None:
             self.last_raw = self.raw
             return
@@ -449,10 +467,15 @@ class LinearCaptureGui:
         if self.invert:
             delta = -delta
         self.travel += delta
-        new_slot = c.travel_slot(self.travel, self.step_deg, self.slot)
-        if new_slot == self.slot:
+        moved = False
+        while True:
+            new_slot = c.travel_slot(self.travel, self.step_deg, self.slot)
+            if new_slot == self.slot:
+                break
+            self.slot = new_slot
+            moved = True
+        if not moved:
             return
-        self.slot = new_slot
         self.index = self.slot % len(KEYS)
         self._cancel_hold()
         self.rest.clear()
@@ -466,6 +489,29 @@ class LinearCaptureGui:
     def _refresh_line(self) -> None:
         self.line = "".join(self.typed).split("\n")[-1] if self.typed else ""
 
+    def _wrapped_lines(self, max_chars: int) -> list[str]:
+        """Word-wrap self.typed for display, cached by revision + width.
+
+        Recomputing "".join(self.typed).split(...) from scratch every frame
+        (60x/sec) made the whole app get slower the longer a session ran,
+        since the cost grows with total characters typed. Only redo the
+        wrap when the text actually changed or the box was resized.
+        """
+        key = (self._typed_rev, max_chars)
+        if self._wrap_cache_key == key:
+            return self._wrap_cache_lines
+        raw_lines = "".join(self.typed).split("\n")
+        lines: list[str] = []
+        for para in raw_lines:
+            if para == "":
+                lines.append("")
+                continue
+            for i in range(0, len(para), max_chars):
+                lines.append(para[i : i + max_chars])
+        self._wrap_cache_key = key
+        self._wrap_cache_lines = lines
+        return lines
+
     def _append_committed(self, text: str) -> None:
         for ch in text:
             self.line += ch
@@ -475,11 +521,13 @@ class LinearCaptureGui:
                 self.line = ""
                 self.typed.append("\n")
                 self.write_out("\n")
+        self._typed_rev += 1
 
     def emit_backspace(self) -> bool:
         changed = w.delete_current_word(self.draft, self.typed)
         if not changed:
             return False
+        self._typed_rev += 1
         self._refresh_line()
         self.rewrite_txt()
         self.write_log("BS")
@@ -506,15 +554,7 @@ class LinearCaptureGui:
     def emit(self, char: str) -> None:
         if self._is_backspace(char):
             self.emit_backspace()
-            # Stay on ⌫: another hold peels the next letter of this word.
-            self.last_emitted = char
-            self.last_index = self.index
-            self.must_leave = False
-            self.hold.clear()
-            self.hold_lock_angle = self.raw
-            self.flash_until = time.time() + 0.35
-            return
-        if char == ACCEPT:
+        elif char == ACCEPT:
             word = self.draft.take_suggestion()
             self._commit_word(word, via="accept")
         elif char == " ":
@@ -641,6 +681,7 @@ class LinearCaptureGui:
         elif self.btn_clear.hit(pos):
             self.typed.clear()
             self.line = ""
+            self._typed_rev += 1
             self.draft.clear()
             self.rewrite_txt()
         elif self._hit_delay(pos):
@@ -842,12 +883,21 @@ class LinearCaptureGui:
         )
         title = self.font_title.render("Medium Device", True, WHITE)
         surf.blit(title, (20, 16))
-        status = self.font_small.render(self.status, True, MUTED)
-        surf.blit(status, (20, self.toolbar_rect.bottom + 4))
-        self._draw_delay_radios(surf)
+        self._draw_panel(surf)
+
+    def _draw_panel(self, surf: pygame.Surface) -> None:
+        pygame.draw.rect(surf, PANEL, self.panel_rect)
+        pygame.draw.line(
+            surf,
+            PANEL_LINE,
+            (self.panel_rect.x, 0),
+            (self.panel_rect.x, self.panel_rect.h),
+            2,
+        )
         mouse = pygame.mouse.get_pos()
         for btn in self.buttons:
             btn.draw(surf, self.font_ui_b, btn.hit(mouse))
+        self._draw_delay_radios(surf)
 
     def set_delay_s(self, seconds: int) -> None:
         if seconds not in DELAY_CHOICES:
@@ -917,14 +967,7 @@ class LinearCaptureGui:
             )
             surf.blit(hint, (area.x, area.y))
             return
-        raw_lines = "".join(self.typed).split("\n")
-        lines: list[str] = []
-        for para in raw_lines:
-            if para == "":
-                lines.append("")
-                continue
-            for i in range(0, len(para), max_chars):
-                lines.append(para[i : i + max_chars])
+        lines = self._wrapped_lines(max_chars)
         visible = lines[-max_lines:]
         y = area.y
         last_x, last_y = area.x, y
@@ -971,8 +1014,6 @@ class LinearCaptureGui:
         suggestion = self.draft.suggestion
         ghost = self.draft.ghost
         if not typed:
-            empty = self.font_ui.render("letters collect here", True, MUTED)
-            surf.blit(empty, empty.get_rect(center=(card.centerx, card.centery + 8)))
             return
 
         hot = time.time() < self.flash_until
