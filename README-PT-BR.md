@@ -624,6 +624,34 @@ Se algum fio estiver errado, o sketch exibirá um veredito colorido. Você tamb�
 | Module looks POWERED | VCC/GND OK → SDA ou SCL errado ou invertido |
 | A0 near 0 | Sem energia no módulo, ou OUT não está em A0 |
 
+#### Exemplos
+
+Conectado ao firmware principal funcionando:
+
+```bash
+python host/wire_check.py --port /dev/ttyUSB0
+```
+
+```
+Opening /dev/ttyUSB0 at 115200 baud... (press Ctrl+C to stop)
+scan:
+AS5600 found at 0x36
+  AS5600 VCC  -> Nano 5V    OK
+  AS5600 GND  -> Nano GND   OK
+  AS5600 SDA  -> Nano A4    OK
+  AS5600 SCL  -> Nano A5    OK
+  AS5600 DIR  -> Nano GND   OK
+a=152.2
+```
+
+O valor `a=...` permanece na mesma linha; só o número muda.
+
+Pare após o primeiro veredito, ao rodar o `wire_check.ino`:
+
+```bash
+python host/wire_check.py --port /dev/ttyUSB0 --once
+```
+
 Quando a checagem terminar, grave `needle_angle_stream.ino` de novo. Deixe o jumper OUT desconectado no uso normal.
 
 ### O que a saída significa

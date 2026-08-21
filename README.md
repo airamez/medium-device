@@ -132,7 +132,7 @@ The rest of this document assumes those two roles stay separate: Arduino IDE tal
 | **M03** | Balsa sticks | Light needle | [Amazon](https://www.amazon.com/Perfect-Modeling-Hobbies-Architecture-Mockups/dp/B0BYXN3443) |
 | **M04** | ~10" wood circle | Dial / board | [Woodpeckers](https://www.amazon.com/Wooden-Plaques-Package-Unfinished-Woodpeckers/dp/B07VVFPFZR) |
 | **M05a** | Super glue | Bond magnet and needle to shaft | [Loctite](https://www.amazon.com/Loctite-Super-Glue-Liquid-Professional/dp/B0CLQCKVDX) |
-| **M05b** | Small screws + nuts for the base lags | |
+| **M05b** | Long screws + nuts for the base lags | |
 
 ELEGOO Nano packs **without a cable** need a separate **Mini-B USB data** cable. Some Nanos ship with loose headers; those headers must be **soldered** before the board will sit in a breadboard.
 
@@ -626,6 +626,34 @@ If a wire is wrong, the sketch reports a colored verdict instead. You can also l
 | Module looks POWERED | VCC/GND OK → SDA or SCL wrong or swapped |
 | A0 near 0 | No power on the module, or OUT not on A0 |
 
+#### Examples
+
+Connected to a working main firmware:
+
+```bash
+python host/wire_check.py --port /dev/ttyUSB0
+```
+
+```
+Opening /dev/ttyUSB0 at 115200 baud... (press Ctrl+C to stop)
+scan:
+AS5600 found at 0x36
+  AS5600 VCC  -> Nano 5V    OK
+  AS5600 GND  -> Nano GND   OK
+  AS5600 SDA  -> Nano A4    OK
+  AS5600 SCL  -> Nano A5    OK
+  AS5600 DIR  -> Nano GND   OK
+a=152.2
+```
+
+The `a=...` value stays on the same line; only the number changes.
+
+Stop after the first verdict when running `wire_check.ino`:
+
+```bash
+python host/wire_check.py --port /dev/ttyUSB0 --once
+```
+
 When the check is done, upload `needle_angle_stream.ino` again. Leave the OUT jumper off for normal use.
 
 ### What the output means
@@ -648,7 +676,7 @@ When the check is done, upload `needle_angle_stream.ino` again. Leave the OUT ju
 
 Do this only after the electronics pass.
 
-You need the bearing, shaft, balsa, wood circle, glue, and the small screw-and-nut counterweight. The electronics stay as they are; you are only adding the spinning assembly.
+You need the bearing, shaft, balsa, wood circle and glue, and the long screw-and-nut for the base legs. The electronics stay as they are; you are only adding the spinning assembly.
 
 ```
    M03 needle
