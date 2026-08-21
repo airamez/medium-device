@@ -298,21 +298,11 @@ def load_config() -> dict:
         return {
             "offset": 0.0,
             "invert": False,
-            "points": [],
             "delay_s": DEFAULT_DELAY_S,
             "wrap_cols": DEFAULT_WRAP_COLS,
             "still_tol_deg": DEFAULT_STILL_TOL_DEG,
         }
     data = json.loads(CONFIG_PATH.read_text())
-    points = []
-    for item in data.get("points") or []:
-        ch = str(item.get("char", "")).upper()
-        if ch not in CHARS:
-            continue
-        points.append(make_point(ch, item["angle"]))
-    by_char = {p["char"]: p for p in points}
-    points = [by_char[c] for c in CHARS if c in by_char]
-    offset = float(data.get("offset", points[0]["angle"] if points else 0.0))
     delay_s = float(data.get("delay_s", DEFAULT_DELAY_S))
     if delay_s <= 0:
         delay_s = DEFAULT_DELAY_S
@@ -323,9 +313,8 @@ def load_config() -> dict:
     if still_tol_deg <= 0:
         still_tol_deg = DEFAULT_STILL_TOL_DEG
     return {
-        "offset": offset,
+        "offset": float(data.get("offset", 0.0)),
         "invert": bool(data.get("invert", False)),
-        "points": points,
         "delay_s": delay_s,
         "wrap_cols": wrap_cols,
         "still_tol_deg": still_tol_deg,
@@ -333,7 +322,7 @@ def load_config() -> dict:
 
 
 def save_config(
-    points: list[dict],
+    points: list[dict] | None = None,
     invert: bool = False,
     delay_s: float | None = None,
     wrap_cols: int | None = None,
@@ -350,20 +339,25 @@ def save_config(
         still_tol_deg = cfg["still_tol_deg"]
     if still_tol_deg <= 0:
         still_tol_deg = DEFAULT_STILL_TOL_DEG
-    a = next(
-        (p["angle"] for p in points if p["char"] == "A"),
-        points[0]["angle"] if points else 0.0,
-    )
+    if points:
+        a = next(
+            (p["angle"] for p in points if p["char"] == "A"),
+            points[0]["angle"] if points else 0.0,
+        )
+        offset = round(float(a), 3)
+    else:
+        offset = round(float(cfg.get("offset", 0.0)), 3)
     payload = {
-        "offset": round(float(a), 3),
+        "offset": offset,
         "invert": invert,
         "delay_s": round(float(delay_s), 3),
         "wrap_cols": int(wrap_cols),
         "still_tol_deg": round(float(still_tol_deg), 3),
-        "points": [
-            {"char": p["char"], "angle": round(p["angle"], 3)} for p in points
-        ],
     }
+    if points:
+        payload["points"] = [
+            {"char": p["char"], "angle": round(p["angle"], 3)} for p in points
+        ]
     CONFIG_PATH.write_text(json.dumps(payload, indent=2) + "\n")
 
 
@@ -2398,7 +2392,7 @@ class LinearCaptureGui:
         self._cancel_hold()
         self.rest = RestWindow(self.delay_s, self.still_tol)
         cfg = load_config()
-        save_config(cfg["points"], cfg["invert"], delay_s=self.delay_s)
+        save_config(invert=cfg["invert"], delay_s=self.delay_s)
 
     def _hit_delay(self, pos: tuple[int, int]) -> bool:
         for sec, rect in self.delay_hits:

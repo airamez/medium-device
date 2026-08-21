@@ -93,14 +93,14 @@ medium-device/
 
 ---
 
-## Os dois programas
+## O software
 
 Você usa **duas ferramentas diferentes**. Elas não são intercambiáveis.
 
 | | O que faz | Qual aplicativo | Arquivo |
 |---|-----------|-----------------|---------|
-| 1 | Coloca o código **no Nano** para a placa ler o ímã | **Arduino IDE** | `firmware/needle_angle_stream/needle_angle_stream.ino` |
-| 2 | Mostra esses números **no computador** e depois transforma em letras | **Terminal** → Python | `host/capture.py` |
+| 1 | Grava o código **no Nano** para a placa ler o ímã | **Arduino IDE** | `firmware/needle_angle_stream/needle_angle_stream.ino` |
+| 2 | Mostra esses números **no computador** e transforma em caracteres | **Terminal** → Python | `host/capture.py` |
 
 Algumas coisas fáceis de confundir:
 
@@ -173,9 +173,9 @@ O E03 é um **disco maciço** (em geral sem furo). Cole na **ponta** do eixo. O 
 Antes de ligar qualquer fio, instale os dois programas dos quais este projeto depende:
 
 1. **Arduino IDE** — usado depois para compilar o sketch e gravá-lo no Nano.
-2. **Python 3** com a biblioteca **pyserial** — usado depois para ler o Nano e digitar letras.
+2. **Python 3** com as bibliotecas **pyserial** e **pygame** (ou **pygame-ce**) — usado depois para ler o Nano e executar a janela de digitação.
 
-Letras faladas (`--sound`) são opcionais. Se quiser, instale também um sintetizador de voz. Tudo abaixo funciona offline e não precisa de conta.
+Letras faladas (Falar letras / `--sound`) são opcionais. Se quiser, instale também um sintetizador de voz. Tudo abaixo funciona offline e não precisa de conta.
 
 Este projeto roda em um **PC Windows, um Mac ou um computador Linux**. Não roda em iPhone nem iPad.
 
@@ -185,10 +185,10 @@ Conecte o Nano só depois que o software estiver instalado, para confirmar que o
 
 1. Instale o [Arduino IDE](https://www.arduino.cc/en/software) (2.x serve). Use o instalador do site do Arduino.
 2. Instale o [Python 3](https://www.python.org/downloads/). Na primeira tela do instalador, marque **Add python.exe to PATH**.
-3. Abra o **Prompt de Comando** ou o **PowerShell** neste repositório e instale o pyserial:
+3. Abra o **Prompt de Comando** ou o **PowerShell** neste repositório e instale o pyserial e o pygame:
 
    ```bat
-   python -m pip install pyserial
+   python -m pip install pyserial pygame-ce
    ```
 
    Um ambiente virtual é opcional, mas deixa tudo mais organizado:
@@ -209,10 +209,10 @@ Se nenhuma porta COM aparecer: instale um driver USB-serial **CH340**, desconect
 
 1. Instale o [Arduino IDE](https://www.arduino.cc/en/software) (2.x serve).
 2. Instale o Python 3 se o Mac ainda não tiver. [python.org](https://www.python.org/downloads/) ou Homebrew (`brew install python`) funcionam.
-3. Abra o **Terminal** neste repositório e instale o pyserial:
+3. Abra o **Terminal** neste repositório e instale o pyserial e o pygame:
 
    ```bash
-   python3 -m pip install pyserial
+   python3 -m pip install pyserial pygame-ce
    ```
 
    Ou use um ambiente virtual:
@@ -232,24 +232,24 @@ Se nenhuma porta aparecer, instale um driver **CH340** para macOS, depois descon
 ### Linux
 
 1. Instale o [Arduino IDE](https://www.arduino.cc/en/software) (2.x serve). Muitas distribuições também o empacotam; qualquer origem serve, desde que você consiga abrir o aplicativo e escolher **Arduino Nano**.
-2. Instale o Python 3 e o pyserial. Prefira o pacote da distribuição, ou um ambiente virtual. Não brigue com o instalador do sistema com um `pip install` solto se ele recusar (PEP 668).
+2. Instale o Python 3, o pyserial e o pygame. Prefira o pacote da distribuição, ou um ambiente virtual. Não brigue com o instalador do sistema com um `pip install` solto se ele recusar (PEP 668).
 
    **Arch / Manjaro**
 
    ```bash
-   sudo pacman -S python-pyserial
+   sudo pacman -S python-pyserial python-pygame
    ```
 
    **Debian / Ubuntu**
 
    ```bash
-   sudo apt install python3-serial
+   sudo apt install python3-serial python3-pygame
    ```
 
    **Fedora**
 
    ```bash
-   sudo dnf install python3-pyserial
+   sudo dnf install python3-pyserial python3-pygame
    ```
 
    **Qualquer distribuição, isolado neste repositório**
@@ -309,7 +309,7 @@ Faça a eletrônica funcionar antes de qualquer cola. O objetivo desta seção �
 - O Nano, o AS5600, jumpers e a protoboard
 - Um cabo USB **de dados**
 - O ímã diametral, na mão (sem colar)
-- Python e pyserial, já instalados, se quiser acompanhar o fluxo pelo terminal
+- Python, pyserial e pygame, já instalados, se quiser acompanhar o fluxo pelo terminal
 
 ### Como a protoboard funciona
 
@@ -571,27 +571,24 @@ a=48.1
 a=90.2
 ```
 
-**No terminal** (precisa de Python e pyserial de [Instalação](#instalação))
+**No terminal** (precisa de Python, pyserial e pygame de [Instalação](#instalação))
 
-Na raiz do repositório:
+O `capture.py` não imprime ângulos crus; ele abre a grade na tela e avança a célula destacada conforme a agulha gira. Isso já é um teste real e completo da fiação:
 
 ```bash
-python host/capture.py --all
+python host/capture.py
 # ou, se existirem várias portas:
-# python host/capture.py --all --port COM3
-# python host/capture.py --all --port /dev/ttyUSB0
+# python host/capture.py --port COM3
+# python host/capture.py --port /dev/ttyUSB0
 ```
 
-Gire o ímã. Depois do upload você deve ver `filter: hyst=2lsb …` uma vez, e então linhas mudando:
+1. Clique em **Iniciar Captura** (ou pressione **P**). O destaque começa em **A**.
+2. Gire o ímã um pouco. A cada vez que você ultrapassar cerca de `--step` graus (10° por padrão), o destaque deve pular para a próxima ou anterior célula.
+3. Ainda sem hardware? `python host/capture.py --demo` roda a mesma janela sem o Nano — arraste o mouse para os lados, ou use as setas **←/→**, para percorrer a grade.
 
-```text
-a=47.28    (gire o ímã — este número deve se mover)
-a=90.14    (gire o ímã — este número deve se mover)
-```
+**Ctrl+C** no terminal, ou o botão **Sair**, fecha o programa.
 
-**Ctrl+C** interrompe o programa Python.
-
-Uma volta completa deve cobrir cerca de 0–360 (ou dar a volta 359 → 0).
+Para uma leitura numérica simples, use o Serial Monitor do Arduino IDE (acima) — ele conversa diretamente com o Nano e não precisa de Python.
 
 ### Se aparecer `scan: none` — faça a checagem dos fios
 
@@ -600,7 +597,7 @@ O software nem sempre consegue nomear um único fio aberto (I2C precisa de VCC, 
 1. Mantenha VCC, GND, SDA, SCL e **DIR → GND** como de costume.
 2. Acrescente um jumper extra se o módulo tiver **OUT** (só para diagnóstico): **AS5600 OUT → Nano A0**.
 3. Arduino IDE → **File → Open** → `firmware/wire_check/wire_check.ino` → **Upload**.
-4. Olhe o Serial Monitor em **115200**, ou execute `python host/capture.py --all`.
+4. Olhe o Serial Monitor em **115200**.
 5. Leia a linha **Verdict**.
 
 | Veredito | Significado |
@@ -656,74 +653,45 @@ Você precisa do rolamento, do eixo, da balsa, do círculo de madeira, da cola e
 2. Encaixe **M01** no centro de **M04**. Passe **M02** por **M01** (eixo só pelo rolamento).
 3. Cole **E03** com **M05a** na **ponta de baixo** de M02, centralizado. Folga até o chip do E01: **1–3 mm**.
 4. Cole **M03** no **topo** de M02. Coloque **M05b** (parafuso e porca) na extremidade curta; acrescente ou tire porcas até a agulha ficar parada em qualquer ângulo.
-5. Marque **A–Z** e depois **0–9** a cada **10°** em M04 (36 setores), ou imprima um dos discos em `docs/base-templates/`. A agulha não pode raspar a face.
-6. Reconecte o USB e confirme que o ângulo ainda muda quando a agulha gira.
+5. Marcar letras em **M04** é opcional — o `capture.py` mostra a grade de caracteres na tela, não no disco. Uma marca simples (ou nenhuma) serve; apenas certifique-se de que a agulha pode girar livremente sem raspar a face.
+6. Reconecte o USB e confirme que o ângulo ainda muda quando a agulha gira (veja [Montagem e execução](#montagem-e-execução)).
 
 ---
 
 ## Digitar letras
 
-O Nano só envia `a=123.4`. O Python transforma isso em A–Z e 0–9.
+O Nano só envia `a=123.4`. O Python transforma isso em um destaque móvel sobre uma grade de caracteres, e manter parado numa célula a digita. Não há etapa de calibração — conecte e rode.
 
 Você precisa de:
 
 - Firmware já gravado e transmitindo
-- Python 3 e pyserial, de [Instalação](#instalação)
-- Um disco de madeira pronto, ou pelo menos 36 marcas para apontar
-- Para `--sound`, um sintetizador de voz da mesma seção de instalação
-
-**Uma vez:** salve o ângulo real do sensor de cada letra impressa.  
-**Todo dia:** confirme A, J, S, 1, e então digite.
-
-### Primeira vez — `--calibrate`
-
-```bash
-python host/capture.py --calibrate
-```
-
-1. Aponte para **A**, toque espaço. Depois **B**, **C**, … **Z**, **0**–**9**, no **sentido horário**.
-2. Espere o número ao vivo **mudar** antes de cada toque. Pare no traço, não depois dele.
-3. Um toque que volte ou caia em uma letra anterior é recusado. Se dois toques caírem no mesmo ângulo, as duas letras anteriores são refeitas uma vez; se ainda estiverem próximas, aquela leitura é salva.
-4. Os 36 ângulos são gravados em `host/config.json`. Nada é digitado neste modo.
-   O `config.json` anterior é copiado antes para `host/config-backups/config_YYYY_MM_DD_HH_MM.json`.
-
-Refaça `--calibrate` se remontar o ímã, reimprimir o disco, ou se as letras continuarem erradas depois de uma sessão normal.
-
-Liste ou restaure um mapa antigo (não precisa do Nano):
-
-```bash
-python host/capture.py --restore              # listar backups
-python host/capture.py --restore latest       # backup mais novo → config.json
-python host/capture.py --restore config_2026_08_16_21_56.json
-```
-
-`--restore` copia o arquivo vivo atual para `config-backups/` antes de sobrescrevê-lo.
-
-### Cada sessão — sem flags
+- Python 3, pyserial e pygame (ou pygame-ce), de [Instalação](#instalação)
+- A agulha montada e livre para girar (veja [Mecânica](#mecânica))
+- Para **Falar letras**, um sintetizador de voz da mesma seção de instalação
 
 ```bash
 python host/capture.py
-# ou, fale cada letra digitada:
+# ou, fale cada letra/palavra digitada:
 python host/capture.py --sound
+# ainda sem hardware? arraste o mouse ou use ←/→ em vez da agulha:
+python host/capture.py --demo
 ```
 
-Precisa de um `--calibrate` concluído antes.
+1. A janela abre **pausada**, com o destaque em **A**. Clique em **Iniciar Captura** (ou pressione **P**).
+2. Gire a agulha um pouco no sentido horário para mover o destaque para a próxima célula, ou no sentido anti-horário para a anterior. A grade envolve letras, depois dígitos, depois as teclas de controle (␣, ✓, ⌫, ↵) à direita de cada linha.
+3. **Mantenha parado** numa célula pelo atraso selecionado (padrão 1 s, veja [Interface do capture.py](#interface-do-capturepy)) para selecioná-la:
+   - Uma **letra ou dígito** é adicionada à caixa *palavra atual* no meio da tela.
+   - **␣ (espaço)** confirma a palavra que você realmente digitou e começa uma nova.
+   - **✓ (completar)** aceita a sugestão de autocompletar mostrada na caixa da palavra atual, em vez de digitar o resto da palavra.
+   - **⌫ (backspace)** desfaz a última letra, ou primeiro descarta uma sugestão de autocompletar oferecida.
+   - **↵ (enter)** confirma a palavra atual e começa uma nova linha.
+4. O texto digitado aparece no painel inferior, com quebra automática de linhas; use a roda do mouse para rolar e revisar textos anteriores.
 
-1. Aponte para **A** (topo), toque. Depois **J** (direita), **S** (baixo), **1** (esquerda).
-2. A linha ao vivo mostra `need 63°` (exemplo) — espere o número chegar perto daquela marca salva, então toque. J e S no mesmo ângulo são recusados.
-3. A linha ao vivo diz **ready** / `tap space, then move`. Toque espaço. A captura **não** começa na letra em que você está (em geral **1**). Mova a agulha primeiro; o temporizador mostra `move` até você sair dessa letra. Depois mantenha uma letra cerca de **1 segundo** para digitar. Mantenha no **vão de 3,5°** entre as letras para digitar um espaço.
+Os logs são gravados continuamente enquanto você digita, em `logs/`: `Session_YYYY_MM_DD_HH_MM.txt` (a transcrição simples) e o `.log` correspondente (uma linha por caractere, com timestamp e ângulo cru — útil se alguma letra sair errada).
 
-```text
- 328.1° A    0.7s | HELLO
-```
+### Falar cada letra — Falar letras / `--sound`
 
-Ângulo, letra atual, temporizador de espera, texto até agora. Depois que uma letra é impressa o temporizador mostra `ok` — saia dela antes da próxima. Uma linha nova começa depois de 60 caracteres.
-
-Logs: `logs/Session_YYYY_MM_DD_HH_MM.txt` (letras) e `.log` (letras + ângulos).
-
-### Falar cada letra — `--sound`
-
-Acrescente `--sound` ao comando diário de digitação. Depois que uma letra (ou espaço) é digitada, o computador a fala em voz alta. Os outros modos (`--calibrate`, `--debug`, `--all`, …) não falam.
+Ative **Falar letras** na janela (ou passe `--sound` na linha de comando). Depois que uma letra, dígito ou palavra é digitada, o computador fala em voz alta.
 
 ```bash
 python host/capture.py --sound
@@ -731,31 +699,39 @@ python host/capture.py --sound
 
 - As letras são faladas como estão (`A`, `B`, …).
 - Os dígitos são palavras (`zero` … `nine`).
-- Um vão digita um espaço e diz **space**.
+- Uma palavra completa é falada como um todo.
 
-Instale um pacote de fala **uma vez**, em [Instalação](#instalação). Se nenhum sintetizador for encontrado, a digitação continua funcionando e o programa imprime `No speech engine`.
+Instale um pacote de fala **uma vez**, em [Instalação](#instalação). Se nenhum sintetizador for encontrado, a digitação continua funcionando; o programa apenas fica em silêncio.
 
-### Se algo parecer errado
+### Digitar em outro idioma
 
-| Sintoma | Comando |
-|---------|---------|
-| Quero ver só o ângulo bruto | `--debug` |
-| A letra está consistentemente errada | `--diagnostic` (depois envie o log) |
-| O ímã / chip não enxerga uma volta completa | `--span` |
-| Nenhum `a=…` | `--all` |
+O dicionário de autocompletar é em inglês. Desmarque a caixa **Autocompletar** para qualquer outro idioma (ou para nomes, código etc.) — cada letra parada é então digitada exatamente como mirada, sem sugestão ou completar via ✓.
 
-### Checagem de ponta a ponta
+---
 
-1. `python host/capture.py --calibrate` — todos os 36 traços, sentido horário.
-2. `python host/capture.py` — A, J, S, 1 (espere `need …°`), depois **ready**. Toque espaço, **mova** a agulha, então mantenha uma letra.
-3. A captura ignora a letra em que você estava (em geral **1**) até você se mover. Depois mantenha cerca de 1 s → **um** caractere. O temporizador mostra `move`, depois conta, depois `ok`.
-4. Vá para a próxima letra e mantenha. Depois de 60 caracteres uma linha nova começa.
+## Interface do capture.py
+
+![janela do capture.py](docs/capture.png)
+
+| # | Elemento | O que faz |
+|---|---------|--------------|
+| 1 | **Grade de caracteres** (esquerda) | Letras A–Z, depois dígitos 0–9, dez por linha. A célula com contorno dourado é o destaque atual; ela avança para a próxima/anterior célula conforme a agulha gira. **J**, **S** e **1** aparecem em vermelho apenas como marcos visuais das linhas — não são teclas especiais. |
+| 2 | **Coluna ␣ / ✓ / ⌫ / ↵** | Quatro teclas de controle no final de cada linha, do mesmo tamanho de uma célula de letra: espaço (confirma a palavra digitada), completar (aceita a sugestão de autocompletar), backspace (desfaz), enter (confirma a palavra e começa uma nova linha). |
+| 3 | **Caixa da palavra atual** | Mostra a palavra sendo mirada — em dourado enquanto uma espera está preenchendo, em branco quando parada. Uma cauda "fantasma" discreta mostra o resto de um match de autocompletar; uma pequena linha `→ sugestão` aparece abaixo quando o match não é um prefixo simples. |
+| 4 | **Painel de transcrição** | Tudo o que já foi digitado, com quebra de linha automática na largura da janela. Role com a roda do mouse quando houver mais texto do que cabe; uma fina barra de rolagem aparece na borda direita quando rolado. |
+| 5 | **Iniciar Captura / Pausar Captura** | Inicia ou pausa a leitura da agulha (também **P**). Ao iniciar, o destaque sempre começa em **A**; nada é digitado até a agulha realmente se mover. |
+| 6 | **Inverter direção** | Inverte qual lado é "próximo" vs. "anterior" (também **I**), para agulha montada de cabeça para baixo ou sensor invertido. |
+| 7 | **Falar letras** | Liga ou desliga a voz (também **Ctrl+S**); veja [Falar cada letra](#falar-cada-letra--falar-letras----sound). |
+| 8 | **Limpar texto** | Limpa apenas a transcrição na tela. O arquivo `Session_*.txt` salvo nunca é reescrito ou encurtado por este botão — nada do que já foi logado é perdido. |
+| 9 | **Atraso para Capturar (segundos)** | Quanto tempo a agulha deve ficar parada numa célula antes de selecioná-la: **0,5, 0,7, 1, 1,5, 2, 3** segundos. |
+| 10 | **Caixa Autocompletar** | Liga ou desliga as sugestões do dicionário em inglês e a tecla ✓; veja [Digitar em outro idioma](#digitar-em-outro-idioma). |
+| 11 | **Sair** | Fecha o programa (também o botão de fechar da janela, ou **Esc**). |
+
+O canto inferior esquerdo da janela sempre mostra onde os logs da sessão atual estão sendo gravados.
 
 ---
 
 ## Referência do capture.py
-
-O firmware imprime `a=…`. O Python é `host/capture.py`. Um modo de cada vez.
 
 ```bash
 python host/capture.py --help
@@ -763,75 +739,33 @@ python host/capture.py --help
 
 No Windows, `python` é o comando usual. No macOS e em algumas instalações Linux é `python3`. Se você criou um ambiente virtual, ative-o primeiro.
 
-### Modos
+### Opções
 
-| Flag | Quando usar | O que acontece |
-|------|-------------|--------------|
-| *(nenhuma)* | Digitação diária | Carrega o mapa de 36 letras. Confirme **A, J, S, 1**. Toque **ready**, depois **mova** a agulha. Digita um caractere quando aquela letra permanece por `--delay` segundos. |
-| `--calibrate` | Primeira vez, ou depois de mudança de hardware | Percorra **A–Z, 0–9**. Salve cada ângulo bruto em `host/config.json`. Copia o arquivo antigo para `host/config-backups/` primeiro. **Não** digita. |
-| `--restore` | Desfazer uma calibração | Lista backups, ou copia um de volta sobre `config.json`. Não precisa de USB. `latest` = o mais novo. |
-| `--debug` | Alinhar a base | Só o ângulo ao vivo. Gire a **base** (agulha em A) até A ficar onde você quer o norte. Ctrl+C para parar. |
-| `--diagnostic` | Letras desalinhadas | Confirme A, J, S, 1. Aponte para uma letra impressa, **Enter**, digite essa letra, Enter. Repita. Ctrl+C grava um resumo em `logs/Diagnostic_*.log` (ângulo bruto, mapa salvo, letra prevista, erro). |
-| `--all` | Checar o firmware | Imprime **toda** amostra bruta `a=…`. Sem letras. |
-| `--stream` | O mesmo, mas mais silencioso | Imprime uma linha nova só quando o ângulo se move bastante (veja `--change-pct`). |
-| `--span` | Checar o ímã | Registra mín/máx enquanto você dá uma volta completa. Span ≥ 300° é bom. |
-
-### Serial (qualquer modo)
-
-| Opção | Padrão | O que faz |
-|--------|---------|--------------|
-| `--port` | o primeiro `/dev/ttyUSB*`, `/dev/ttyACM*`, ou `cu.usbserial*` no macOS | Porta USB. Exemplo: `--port COM3` ou `--port /dev/ttyUSB0` |
-| `--baud` | `115200` | Precisa coincidir com o sketch |
-
-### Digitação (modo padrão)
-
-| Opção | Padrão | O que faz |
-|--------|---------|--------------|
-| `--delay` | `1.0` (salvo como `delay_s`) | Segundos que a **mesma letra** precisa permanecer na tela antes de ser digitada. Jitter analógico está ok; mudar de letra zera o temporizador. |
-| `--wrap` | `60` (salvo como `wrap_cols`) | Nova linha depois desta quantidade de caracteres. |
-| `--invert` | desligado | Força a direção inversa. Normalmente vem de `--calibrate`. |
-| `--sound` | desligado | Fala cada letra digitada ou “space” (somente digitação diária). Precisa de um sintetizador de voz de [Instalação](#instalação). Offline, sem conta. |
+| Flag | Padrão | O que faz |
+|------|---------|--------------|
+| `--port` | o primeiro `/dev/ttyUSB*`, `/dev/ttyACM*`, ou `cu.usbserial*` no macOS | Porta USB. Exemplo: `--port COM3` ou `--port /dev/ttyUSB0`. |
+| `--baud` | `115200` | Precisa coincidir com o sketch. |
+| `--delay` | `1.0`, de `host/config.json` | Segundos que a agulha deve ficar parada antes de um caractere ser capturado. Também pode ser mudado ao vivo pelo seletor **Atraso para Capturar** na janela (essa escolha é salva de volta no `config.json`). |
+| `--wrap` | `60`, de `host/config.json` | Nova linha depois desta quantidade de caracteres na transcrição salva. |
+| `--invert` | desligado, ou de `config.json` | Inicia com a direção invertida. Também pode ser alternado ao vivo com **Inverter direção** / **I**. |
+| `--sound` | desligado | Inicia com **Falar letras** ligado. |
+| `--demo` | desligado | Não precisa do Nano: arraste o mouse para os lados, ou pressione **←/→**, para mover o destaque em vez de girar a agulha. |
+| `--step` | `10.0` | Graus de rotação da agulha necessários para mover uma célula (espaço, backspace, completar e enter contam o mesmo que uma letra). |
 | `--log-dir` | `logs/` na raiz do repositório | Para onde vão `Session_*.txt` / `Session_*.log`. |
 
-`--delay` e `--wrap` ficam gravados em `host/config.json`. Eles **não** sobrescrevem as 36 marcas das letras.
-
-`--still-tol` e `--move-deg` são flags restantes. A digitação não as usa.
-
-### Stream / span
-
-| Opção | Padrão | O que faz |
-|--------|---------|--------------|
-| `--change-pct` | `10` (36°) | Com `--stream`, nova linha quando o ângulo se move esta porcentagem de uma volta. Mudar isso de 10 também entra no modo stream. |
-| `--span-seconds` | `12` | Por quanto tempo `--span` registra. |
-
-### O que é salvo (`host/config.json`)
-
-`--calibrate` grava as 36 letras mais `invert`. Uma sessão normal só **lê** esse arquivo e mede A, J, S, 1 para alinhar o mapa com a posição da base de hoje.
-
-```text
---calibrate     salvar A=327.4, B=338.1, … 9=317.4
-python capture  medir A, J, S, 1
-                esticar as 36 marcas salvas sobre esses quatro
-                letra = marca salva mais próxima, ou espaço nos vãos de 3,5°
-                digitar quando essa letra (ou espaço) permanecer ~1 s
-```
+`--delay`, `--wrap` e `--invert` leem o padrão de `host/config.json` e só são substituídos para aquela execução quando a flag é passada; escolher um novo atraso na janela atualiza o `config.json` para a próxima vez.
 
 ### Exemplos
 
 ```bash
 python host/capture.py --help
-python host/capture.py --calibrate       # uma vez: salvar as 36 letras (faz backup do arquivo antigo)
-python host/capture.py --restore         # listar mapas salvos
-python host/capture.py --restore latest  # colocar o mapa anterior de volta
-python host/capture.py                   # diário: A J S 1, depois digitar
-python host/capture.py --debug           # ângulo bruto; gire a base
-python host/capture.py --diagnostic      # Enter + letra verdadeira → Diagnostic_*.log
-python host/capture.py --sound           # falar cada letra
-python host/capture.py --delay 1.5       # manter um pouco mais antes de digitar
+python host/capture.py                    # execução normal: agulha + grade na tela
+python host/capture.py --demo             # experimente a interface sem hardware
+python host/capture.py --sound            # fale cada letra/palavra digitada
+python host/capture.py --delay 1.5        # aguarde um pouco mais antes de digitar
 python host/capture.py --wrap 40
 python host/capture.py --port COM3
-python host/capture.py --all             # cada a=… bruto
-python host/capture.py --span            # mín/máx de uma volta completa
+python host/capture.py --step 6           # giros menores da agulha selecionam a próxima célula
 ```
 
 ---
@@ -848,7 +782,7 @@ O `.ino` é aberto e gravado **somente** no Arduino IDE. O Python é só `host/c
 | Escolher a porta USB | Tools → Port |
 | Enviar o programa para o Nano | Botão Upload (→) |
 | Ver `a=…` no IDE | Tools → Serial Monitor, baud **115200** |
-| Ver `a=…` no terminal | `python host/capture.py --all` **depois** que o Upload der certo |
+| Ver a grade se mover na tela | `python host/capture.py` **depois** que o Upload der certo |
 
 O endereço I2C do AS5600 é `0x36`. O ângulo é 12 bits (0–4095) → graus = `raw * 360 / 4096`. O firmware grava CONF (histerese 2 LSB, filtro lento 16×), lê o registrador ANGLE filtrado (`0x0E`) e imprime a média de 8 amostras como `a=123.45`.
 
@@ -857,16 +791,16 @@ O endereço I2C do AS5600 é `0x36`. O ângulo é 12 bits (0–4095) → graus =
 ## Pronto quando
 
 - [ ] A porta do Nano aparece; o firmware é gravado
-- [ ] O Serial Monitor ou `capture.py --all` mostra `a=…` mudando quando o ímã ou a agulha gira
+- [ ] O Serial Monitor mostra `a=…` mudando quando o ímã ou a agulha gira
 - [ ] A agulha está livre e equilibrada
-- [ ] O anel das letras está em M04
-- [ ] Manter uma letra imprime um caractere
+- [ ] `python host/capture.py` abre e girar a agulha move o destaque na tela
+- [ ] Manter uma célula digita um caractere
 - [ ] Um arquivo de log cresce em `logs/`
 
 ### Reproduzir do zero
 
 1. Compre a lista de itens; solde os headers do Nano se precisar; pegue um cabo Mini-B **de dados** se o kit não tiver.
-2. Instale Arduino IDE, Python e pyserial para o seu sistema operacional. Confirme a porta USB.
+2. Instale Arduino IDE, Python, pyserial e pygame para o seu sistema operacional. Confirme a porta USB.
 3. Cinco fios (incluindo DIR→GND), ímã sobre o chip, grave o sketch, acompanhe a serial em 115200.
-4. Rolamento, eixo, ímã na **ponta**, agulha, letras.
-5. `python host/capture.py --calibrate` uma vez, depois `python host/capture.py` em cada sessão (A, J, S, 1, manter para digitar).
+4. Rolamento, eixo, ímã na **ponta**, agulha.
+5. `python host/capture.py` — clique em **Iniciar Captura**, gire a agulha para mover o destaque, mantenha uma célula para digitá-la.
