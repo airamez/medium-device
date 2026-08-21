@@ -114,7 +114,9 @@ def main(argv: list[str] | None = None) -> None:
                     elif in_verdict:
                         colored = colorize(line)
                         print(colored)
-                        if args.once and colored != line:
+                        if (
+                            args.once and colored != line
+                        ) or line.startswith("  I2C works"):
                             break
                     elif line.startswith(("  found 0x", "  device at 0x")):
                         addr = line.split()[-1]
