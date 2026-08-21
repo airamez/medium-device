@@ -1776,31 +1776,29 @@ class LinearCaptureGui:
         content_w = w - panel_w
         word_h = 92
         log_h = 22
-        text_h = max(160, int(h * 0.28))
-        footer = word_h + text_h + log_h + 28
+        # Reserve a floor for the transcript so the letter grid cannot eat it.
+        # After the grid is placed, the box itself stretches to the log line.
+        text_min_h = max(160, int(h * 0.28))
+        footer = word_h + text_min_h + log_h + 28
         top = 10
         grid_w = content_w - 40
         grid_h = max(120, h - top - footer)
         n_rows = len(GRID_ROWS)
-        n_letter_rows = len(LETTER_ROWS)
         gap_frac = 0.12
         fit_w = ROW_CELLS + gap_frac * (ROW_CELLS - 1)
         fit_h = n_rows + gap_frac * (n_rows - 1)
-        cell = min(grid_w / fit_w, (grid_h - 12) / fit_h)
+        cell = min(grid_w / fit_w, grid_h / fit_h)
         self.cell = max(40, int(cell))
         self.gap = max(6, int(self.cell * gap_frac))
         pitch = self.cell + self.gap
         total_w = ROW_CELLS * self.cell + (ROW_CELLS - 1) * self.gap
-        total_h = n_rows * self.cell + (n_rows - 1) * self.gap + 12
         ox = 20 + max(0, (grid_w - total_w) // 2)
         oy = top + 6
         self.grid_origin = (ox, oy)
 
         self.cell_rects = []
         y = oy
-        for ri, row in enumerate(GRID_ROWS):
-            if ri == n_letter_rows:
-                y += 10
+        for row in GRID_ROWS:
             x = ox
             for ch in row:
                 if ch is not None:
@@ -1813,12 +1811,12 @@ class LinearCaptureGui:
         self.word_box = pygame.Rect(0, 0, ww, word_h)
         self.word_box.centerx = content_w // 2
         self.word_box.y = grid_bottom + 10
-        self.text_box = pygame.Rect(
-            16, self.word_box.bottom + 10, content_w - 32, text_h
-        )
         self.log_label_rect = pygame.Rect(
-            16, min(h - log_h - 4, self.text_box.bottom + 4), content_w - 32, log_h
+            16, h - log_h - 4, content_w - 32, log_h
         )
+        text_top = self.word_box.bottom + 10
+        text_h = max(24, self.log_label_rect.y - 6 - text_top)
+        self.text_box = pygame.Rect(16, text_top, content_w - 32, text_h)
 
         # Right-side vertical control panel: buttons stacked top to bottom,
         # then the Hold delay picker below them.
