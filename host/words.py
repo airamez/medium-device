@@ -207,10 +207,12 @@ class WordDraft:
         )
 
     def add(self, char: str) -> None:
-        if len(char) != 1 or not char.isalnum():
+        if len(char) != 1:
+            return
+        if not char.isalnum() and char != "♥":
             return
         self.pinned = None
-        self.letters.append(char.upper())
+        self.letters.append(char.upper() if char.isalnum() else char)
 
     def backspace(self) -> bool:
         """Change the word in the box. True if anything changed."""

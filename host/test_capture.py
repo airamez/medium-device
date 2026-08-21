@@ -74,6 +74,7 @@ class SpaceGapTests(unittest.TestCase):
         self.assertEqual(c.speak_word("."), "period")
         self.assertEqual(c.speak_word(","), "comma")
         self.assertEqual(c.speak_word("?"), "question mark")
+        self.assertEqual(c.speak_word("♥"), "heart")
 
 
 class CardinalConfirmTests(unittest.TestCase):
@@ -194,15 +195,18 @@ class ApplyPunctTests(unittest.TestCase):
 class PunctGridTests(unittest.TestCase):
     def test_period_comma_question_sit_after_z(self):
         self.assertEqual(c.PUNCT, ".,?")
+        self.assertEqual(c.HEART, "♥")
         last = c.LETTER_ROWS[-1]
         self.assertEqual(
             last,
-            list("UVWXYZ.,?") + [None, " ", c.ACCEPT, c.BS, c.ENTER],
+            list("UVWXYZ.,?♥") + [" ", c.ACCEPT, c.BS, c.ENTER],
         )
 
     def test_keys_step_from_z_into_punct(self):
         z = c.KEYS.index("Z")
-        self.assertEqual(c.KEYS[z : z + 4], list("Z.,?"))
+        self.assertEqual(c.KEYS[z : z + 5], list("Z.,?♥"))
+        q = c.KEYS.index("?")
+        self.assertEqual(c.KEYS[q : q + 3], ["?", "♥", " "])
 
 
 class LetterHoldTests(unittest.TestCase):
@@ -1188,6 +1192,13 @@ class WordIndexTests(unittest.TestCase):
         draft.add("?")
         self.assertEqual(draft.typed, "H")
 
+    def test_draft_keeps_heart(self):
+        draft = w.WordDraft(w.WordIndex())
+        draft.add("I")
+        draft.add("♥")
+        draft.add("U")
+        self.assertEqual(draft.typed, "I♥U")
+
     def test_digits_are_not_completed(self):
         self.assertIsNone(self.idx.closest("2"))
         self.assertIsNone(self.idx.closest("A1"))
@@ -1385,6 +1396,15 @@ class PunctCommitTests(unittest.TestCase):
         self.assertEqual("".join(gui.typed), "HI. ")
         gui.emit(",")
         self.assertEqual("".join(gui.typed), "HI. ")
+
+    def test_heart_types_into_the_word_box(self):
+        gui = self._gui_with("I")
+        gui.emit("♥")
+        self.assertEqual(gui.draft.typed, "I♥")
+        self.assertEqual("".join(gui.typed), "")
+        gui.emit(" ")
+        self.assertEqual("".join(gui.typed), "I♥ ")
+        self.assertEqual(gui.draft.typed, "")
 
 
 if __name__ == "__main__":

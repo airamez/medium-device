@@ -2,10 +2,11 @@
 """Linear-grid capture. Small needle turns step to the previous or next character.
 
 This layout shows ten characters per row, with space, complete, backspace,
-then enter at the right of every line (letters ␣ ✓ ⌫ ↵). Period, comma, and
-question mark sit after Z, same cell size as a letter. Numbers follow on
-their own row. Each cell — letter or control — owns the same amount of
-needle travel (default 10°), so the grid is not squeezed into one 360° turn.
+then enter at the right of every line (letters ␣ ✓ ⌫ ↵). Period, comma,
+question mark, and a heart sit after Z, same cell size as a letter. Numbers
+follow on their own row. Each cell — letter or control — owns the same
+amount of needle travel (default 10°), so the grid is not squeezed into
+one 360° turn.
 
 Letters go into a current-word box in the middle of the transcript.
 Space commits the letters you actually typed. Period, comma, and question
@@ -1154,6 +1155,7 @@ _SPEAK_WORDS = {
     ".": "period",
     ",": "comma",
     "?": "question mark",
+    "♥": "heart",
     "0": "zero",
     "1": "one",
     "2": "two",
@@ -1526,6 +1528,7 @@ ACCEPT = "✓"
 ENTER = "↵"
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 PUNCT = ".,?"
+HEART = "♥"  # fills the leftover cell after ? on the last letter row
 DIGITS = "0123456789"
 
 
@@ -1550,7 +1553,7 @@ def _rows_with_ends(seq: str, n: int) -> list[list[str | None]]:
     ]
 
 
-LETTER_ROWS = _rows_with_ends(LETTERS + PUNCT, CONTENT_COLS)
+LETTER_ROWS = _rows_with_ends(LETTERS + PUNCT + HEART, CONTENT_COLS)
 DIGIT_ROWS = _rows_with_ends(DIGITS, CONTENT_COLS)
 GRID_ROWS = LETTER_ROWS + DIGIT_ROWS
 KEYS = [ch for row in GRID_ROWS for ch in row if ch is not None]
