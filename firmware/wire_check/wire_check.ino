@@ -2,7 +2,7 @@
  * Wire check — find what is wrong when scan finds nothing.
  *
  * Arduino IDE: File → Open this file → Upload → Tools → Serial Monitor → 115200
- * Or: python host/capture.py
+ * Or: python host/wire_check.py
  *
  * Normal 5 wires:
  *   AS5600 VCC -> Nano 5V   (or 3.3V if the module says 3.3V-only)

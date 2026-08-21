@@ -51,7 +51,7 @@ Python on the PC  -->  maps the angle to a letter  -->  console + log file
 | Needle (M03), shaft (M02), magnet (E03) | Bearing outer race (M01), wood base (M04), sensor, Nano, PC |
 
 The firmware on the Nano is deliberately simple: it only streams angles.  
-The Python program on the computer does the rest: a 36-character map, a short A / J / S / 1 check each session, settle detection, and logging.
+The Python program on the computer does the rest: it turns small relative needle turns into steps through an on-screen grid, detects when the needle has settled on a cell, and logs what you type.
 
 ---
 
@@ -60,12 +60,12 @@ The Python program on the computer does the rest: a 36-character map, a short A 
 ```
   TOP VIEW                         SIDE STACK (center)
 
-      7  A  D                         M03  ========●========► needle
-    4         G                            |
-  1      ●------► M                   M02  |  shaft
-    Y         J                            |
-      V  S  P                         M01  (====)  bearing in M04 base
-                                           |
+                                       M03  ========●========► needle
+                                            |
+                                       M02  |  shaft
+                                            |
+      ●------►                        M01  (====)  bearing in M04 base
+      (needle points anywhere)             |
                                       E03  [N|S]   magnet on shaft END
                                            |  1–3 mm air gap
                                       E01  [AS5600]
@@ -74,7 +74,7 @@ The Python program on the computer does the rest: a 36-character map, a short A 
                                       E02  [Nano] ---- E06 USB ---- PC
 ```
 
-![Part map](docs/device-diagram.png)
+![Part map](docs/medium-device-diagram.png)
 
 Item codes match the [parts list](#parts): **E** is electronics, **M** is mechanics.
 
@@ -594,13 +594,30 @@ For a plain numeric readout instead, use Arduino IDE's Serial Monitor (above) �
 
 ### If you see `scan: none` — run the wire check
 
-Software cannot always name one open wire (I2C needs VCC, GND, SDA, and SCL). This extra sketch tests the Nano pins, an optional **OUT→A0** jumper, and prints a verdict. Keep **DIR → GND** as in the normal five-wire hookup.
+The wire check is a diagnostic sketch that tests the physical connections between the **Nano** and the **AS5600**: VCC, GND, SDA (A4), SCL (A5), DIR→GND, and the optional **OUT→A0** jumper. It prints a verdict that tells you which wire is wrong or missing. Keep **DIR → GND** as in the normal five-wire hookup.
 
 1. Keep VCC, GND, SDA, SCL, and **DIR → GND** as usual.
 2. Add one extra jumper if the module has **OUT** (diagnosis only): **AS5600 OUT → Nano A0**.
 3. Arduino IDE → **File → Open** → `firmware/wire_check/wire_check.ino` → **Upload**.
-4. Watch Serial Monitor at **115200**.
-5. Read the **Verdict** line.
+4. Read the verdict in the terminal:
+   ```bash
+   python host/wire_check.py
+   ```
+   (Or use Arduino IDE **Serial Monitor** at **115200** if you prefer.)
+5. Press **Ctrl+C** to stop.
+
+With everything wired correctly, `wire_check.py` will show:
+
+```
+AS5600 found at 0x36
+  AS5600 VCC  -> Nano 5V    OK
+  AS5600 GND  -> Nano GND   OK
+  AS5600 SDA  -> Nano A4    OK
+  AS5600 SCL  -> Nano A5    OK
+  AS5600 DIR  -> Nano GND   OK
+```
+
+If a wire is wrong, the sketch reports a colored verdict instead. You can also leave `wire_check.py` connected while running `needle_angle_stream.ino`; the live `a=` value overwrites the same terminal line instead of scrolling.
 
 | Verdict | Meaning |
 |---------|---------|

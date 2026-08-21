@@ -49,7 +49,7 @@ Python no PC  -->  mapeia o ângulo para uma letra  -->  console + arquivo de lo
 | Agulha (M03), eixo (M02), ímã (E03) | Anel externo do rolamento (M01), base de madeira (M04), sensor, Nano, PC |
 
 O firmware no Nano é deliberadamente simples: ele só transmite ângulos.  
-O programa Python no computador faz o resto: um mapa de 36 caracteres, uma verificação rápida de A / J / S / 1 em cada sessão, detecção de estabilidade e registro em log.
+O programa Python no computador faz o resto: transforma pequenos giros relativos da agulha em passos por uma grade na tela, detecta quando a agulha parou numa célula e registra o que você digita.
 
 ---
 
@@ -58,12 +58,12 @@ O programa Python no computador faz o resto: um mapa de 36 caracteres, uma verif
 ```
   VISTA DE CIMA                    PILHA LATERAL (centro)
 
-      7  A  D                         M03  ========●========► agulha
-    4         G                            |
-  1      ●------► M                   M02  |  eixo
-    Y         J                            |
-      V  S  P                         M01  (====)  rolamento na base M04
-                                           |
+                                       M03  ========●========► agulha
+                                            |
+                                       M02  |  eixo
+                                            |
+      ●------►                        M01  (====)  rolamento na base M04
+      (agulha aponta para qualquer lugar)   |
                                       E03  [N|S]   ímã na PONTA do eixo
                                            |  folga de ar 1–3 mm
                                       E01  [AS5600]
@@ -72,7 +72,7 @@ O programa Python no computador faz o resto: um mapa de 36 caracteres, uma verif
                                       E02  [Nano] ---- E06 USB ---- PC
 ```
 
-![Part map](docs/device-diagram.png)
+![Mapa de peças](docs/medium-device-diagram.png)
 
 Os códigos dos itens coincidem com a [lista de peças](#peças): **E** é eletrônica, **M** é mecânica.
 
@@ -592,13 +592,30 @@ Para uma leitura numérica simples, use o Serial Monitor do Arduino IDE (acima) 
 
 ### Se aparecer `scan: none` — faça a checagem dos fios
 
-O software nem sempre consegue nomear um único fio aberto (I2C precisa de VCC, GND, SDA e SCL). Este sketch extra testa os pinos do Nano, um jumper opcional **OUT→A0**, e imprime um veredito. Mantenha **DIR → GND** como na ligação normal de cinco fios.
+A checagem de fios é um sketch de diagnóstico que testa as conexões físicas entre o **Nano** e o **AS5600**: VCC, GND, SDA (A4), SCL (A5), DIR→GND e o jumper opcional **OUT→A0**. Ele imprime um veredito que indica qual fio está errado ou faltando. Mantenha **DIR → GND** como na ligação normal de cinco fios.
 
 1. Mantenha VCC, GND, SDA, SCL e **DIR → GND** como de costume.
 2. Acrescente um jumper extra se o módulo tiver **OUT** (só para diagnóstico): **AS5600 OUT → Nano A0**.
 3. Arduino IDE → **File → Open** → `firmware/wire_check/wire_check.ino` → **Upload**.
-4. Olhe o Serial Monitor em **115200**.
-5. Leia a linha **Verdict**.
+4. Leia o veredito no terminal:
+   ```bash
+   python host/wire_check.py
+   ```
+   (Ou use o **Serial Monitor** do Arduino IDE a **115200**, se preferir.)
+5. Pressione **Ctrl+C** para parar.
+
+Se todos os fios estiverem corretos, o `wire_check.py` mostrará:
+
+```
+AS5600 found at 0x36
+  AS5600 VCC  -> Nano 5V    OK
+  AS5600 GND  -> Nano GND   OK
+  AS5600 SDA  -> Nano A4    OK
+  AS5600 SCL  -> Nano A5    OK
+  AS5600 DIR  -> Nano GND   OK
+```
+
+Se algum fio estiver errado, o sketch exibirá um veredito colorido. Você também pode deixar o `wire_check.py` conectado enquanto roda o `needle_angle_stream.ino`; o valor `a=` é atualizado na mesma linha do terminal, sem rolar.
 
 | Veredito | Significado |
 |---------|---------|
