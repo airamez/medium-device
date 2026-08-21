@@ -3,5 +3,6 @@
   "invert": false,
   "delay_s": 1.0,
   "wrap_cols": 60,
-  "still_tol_deg": 2.0
+  "still_tol_deg": 2.0,
+  "lang": "en-US"
 }

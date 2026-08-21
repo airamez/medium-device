@@ -750,7 +750,9 @@ Instale um pacote de fala **uma vez**, em [Instalação](#instalação). Se nenh
 
 ### Digitar em outro idioma
 
-O dicionário de autocompletar é em inglês. Desmarque a caixa **Autocompletar** para qualquer outro idioma (ou para nomes, código etc.) — cada letra parada é então digitada exatamente como mirada, sem sugestão ou completar via ✓.
+Escolha o dicionário no menu **Language** abaixo de Autocompletar (`en-US` é o padrão). As listas vêm em `host/langs/` como `en-us.txt`, `es.txt`, `fr.txt` e `pt-br.txt`. Coloque outro arquivo `*.txt` nessa pasta (uma palavra por linha, as mais comuns primeiro) e ele aparece no menu na próxima vez que você abrir — sem reiniciar. Trocar o idioma descarrega o dicionário anterior e carrega o novo.
+
+Desmarque a caixa **Autocompletar** para nomes, código ou qualquer coisa que as listas não devam reescrever — cada letra parada é então digitada exatamente como mirada, sem sugestão ou completar via ✓.
 
 ---
 
@@ -769,8 +771,9 @@ O dicionário de autocompletar é em inglês. Desmarque a caixa **Autocompletar*
 | 7 | **Falar letras** | Liga ou desliga a voz (também **Ctrl+S**); veja [Falar cada letra](#falar-cada-letra--falar-letras----sound). |
 | 8 | **Limpar texto** | Limpa apenas a transcrição na tela. O arquivo `Session_*.txt` salvo nunca é reescrito ou encurtado por este botão — nada do que já foi logado é perdido. |
 | 9 | **Atraso para Capturar (segundos)** | Quanto tempo a agulha deve ficar parada numa célula antes de selecioná-la: **0,5, 0,7, 1, 1,5, 2, 3** segundos. |
-| 10 | **Caixa Autocompletar** | Liga ou desliga as sugestões do dicionário em inglês e a tecla ✓; veja [Digitar em outro idioma](#digitar-em-outro-idioma). |
-| 11 | **Sair** | Fecha o programa (também o botão de fechar da janela, ou **Esc**). |
+| 10 | **Caixa Autocompletar** | Liga ou desliga as sugestões do dicionário e a tecla ✓; veja [Digitar em outro idioma](#digitar-em-outro-idioma). |
+| 11 | **Menu Language** | Qual lista de palavras o autocompletar usa. As opções são os arquivos `*.txt` em `host/langs/`, em ordem alfabética; o padrão é **en-US**. |
+| 12 | **Sair** | Fecha o programa (também o botão de fechar da janela, ou **Esc**). |
 
 O canto inferior esquerdo da janela sempre mostra onde os logs da sessão atual estão sendo gravados.
 

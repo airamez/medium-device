@@ -752,7 +752,9 @@ Install a speech package **once**, in [Installation](#installation). If no speec
 
 ### Typing in a language other than English
 
-The autocomplete dictionary is English. Turn off the **Auto-complete** checkbox for any other language (or for names, code, etc.) — every held letter is then typed exactly as aimed, with no suggestion or ✓ completion.
+Pick the dictionary with the **Language** dropdown under Auto-complete (`en-US` is the default). Bundled lists live in `host/langs/` as `en-us.txt`, `es.txt`, `fr.txt`, and `pt-br.txt`. Drop another `*.txt` file in that folder (one word per line, most common first) and it appears in the dropdown the next time you open it — no restart needed. Switching language unloads the previous dictionary and loads the new one.
+
+Turn off the **Auto-complete** checkbox for names, code, or anything the lists should not rewrite — every held letter is then typed exactly as aimed, with no suggestion or ✓ completion.
 
 ---
 
@@ -771,8 +773,9 @@ The autocomplete dictionary is English. Turn off the **Auto-complete** checkbox 
 | 7 | **Speak letters** | Toggles spoken feedback (also **Ctrl+S**); see [Speak each letter](#speak-each-letter--speak-letters----sound). |
 | 8 | **Clear text** | Clears only the on-screen transcript. The saved `Session_*.txt` log file is never rewritten or shortened by this button — nothing already logged is lost. |
 | 9 | **Delay to Capture (seconds)** | How long the needle must sit still on a cell before it is selected: **0.5, 0.7, 1, 1.5, 2, 3** seconds. |
-| 10 | **Auto-complete** checkbox | Turns the English dictionary suggestions and the ✓ key on or off; see [Typing in a language other than English](#typing-in-a-language-other-than-english). |
-| 11 | **Exit** | Closes the program (also the window's close button, or **Esc**). |
+| 10 | **Auto-complete** checkbox | Turns dictionary suggestions and the ✓ key on or off; see [Typing in a language other than English](#typing-in-a-language-other-than-english). |
+| 11 | **Language** dropdown | Which word list autocomplete uses. Options are the `*.txt` files in `host/langs/`, shown alphabetically; default **en-US**. |
+| 12 | **Exit** | Closes the program (also the window's close button, or **Esc**). |
 
 The bottom-left corner of the window always shows where the current session's logs are being written.
 

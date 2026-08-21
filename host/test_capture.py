@@ -71,6 +71,9 @@ class SpaceGapTests(unittest.TestCase):
         self.assertEqual(c.speak_word(" "), "space")
         self.assertEqual(c.speak_word("0"), "zero")
         self.assertEqual(c.speak_word("8"), "eight")
+        self.assertEqual(c.speak_word("."), "period")
+        self.assertEqual(c.speak_word(","), "comma")
+        self.assertEqual(c.speak_word("?"), "question mark")
 
 
 class CardinalConfirmTests(unittest.TestCase):
@@ -152,6 +155,54 @@ class TravelSlotTests(unittest.TestCase):
         self.assertAlmostEqual(c.slot_offset_frac(10.0, 10.0, 1), 0.5)
         self.assertAlmostEqual(c.slot_offset_frac(12.0, 10.0, 1), 0.7)
         self.assertEqual(c.slot_offset_frac(80.0, 10.0, 0), 1.0)
+
+
+class ApplyPunctTests(unittest.TestCase):
+    def test_replaces_trailing_space(self):
+        chars = list("HELLO ")
+        c.apply_punct(chars, ".")
+        self.assertEqual("".join(chars), "HELLO. ")
+
+    def test_attaches_when_no_trailing_space(self):
+        chars = list("HELLO")
+        c.apply_punct(chars, "?")
+        self.assertEqual("".join(chars), "HELLO? ")
+
+    def test_commits_current_word_then_mark(self):
+        chars = list("HI ")
+        c.apply_punct(chars, ",", current_word="THERE")
+        self.assertEqual("".join(chars), "HI THERE, ")
+
+    def test_empty_transcript_types_the_mark(self):
+        chars: list[str] = []
+        self.assertTrue(c.apply_punct(chars, "."))
+        self.assertEqual("".join(chars), ". ")
+
+    def test_refuses_stacked_punctuation(self):
+        chars = list("HELLO. ")
+        self.assertFalse(c.apply_punct(chars, "."))
+        self.assertEqual("".join(chars), "HELLO. ")
+        self.assertFalse(c.apply_punct(chars, "?"))
+        self.assertEqual("".join(chars), "HELLO. ")
+
+    def test_new_word_after_punct_may_take_a_mark(self):
+        chars = list("HI. ")
+        self.assertTrue(c.apply_punct(chars, ".", current_word="THERE"))
+        self.assertEqual("".join(chars), "HI. THERE. ")
+
+
+class PunctGridTests(unittest.TestCase):
+    def test_period_comma_question_sit_after_z(self):
+        self.assertEqual(c.PUNCT, ".,?")
+        last = c.LETTER_ROWS[-1]
+        self.assertEqual(
+            last,
+            list("UVWXYZ.,?") + [None, " ", c.ACCEPT, c.BS, c.ENTER],
+        )
+
+    def test_keys_step_from_z_into_punct(self):
+        z = c.KEYS.index("Z")
+        self.assertEqual(c.KEYS[z : z + 4], list("Z.,?"))
 
 
 class LetterHoldTests(unittest.TestCase):
@@ -420,6 +471,13 @@ class DelayConfigTests(unittest.TestCase):
         self.assertEqual(c.load_config()["delay_s"], c.DEFAULT_DELAY_S)
         self.assertEqual(c.load_config()["wrap_cols"], c.DEFAULT_WRAP_COLS)
         self.assertEqual(c.load_config()["still_tol_deg"], c.DEFAULT_STILL_TOL_DEG)
+        self.assertEqual(c.load_config()["lang"], w.DEFAULT_LANG)
+
+    def test_save_and_load_lang(self):
+        c.save_config(invert=False, lang="pt-BR")
+        self.assertEqual(c.load_config()["lang"], "pt-BR")
+        c.save_config(invert=False)
+        self.assertEqual(c.load_config()["lang"], "pt-BR")
 
     def test_save_and_load_wrap(self):
         points = pts(("A", 10), ("J", 100))
@@ -1122,13 +1180,211 @@ class WordIndexTests(unittest.TestCase):
         draft.add("A")
         self.assertEqual(draft.typed, "A")
 
+    def test_draft_ignores_punct(self):
+        draft = w.WordDraft(w.WordIndex())
+        draft.add("H")
+        draft.add(".")
+        draft.add(",")
+        draft.add("?")
+        self.assertEqual(draft.typed, "H")
+
     def test_digits_are_not_completed(self):
         self.assertIsNone(self.idx.closest("2"))
         self.assertIsNone(self.idx.closest("A1"))
 
+    def test_fold_letters_strips_accents(self):
+        self.assertEqual(w.fold_letters("café"), "cafe")
+        self.assertEqual(w.fold_letters("não"), "nao")
+        self.assertEqual(w.fold_letters("niño"), "nino")
+        self.assertEqual(w.fold_letters("l'amour"), "lamour")
+        self.assertEqual(w.fold_letters("œuvre"), "oeuvre")
+
+    def test_insert_keeps_accents_and_skips_folded_duplicates(self):
+        idx = w.WordIndex()
+        idx.insert("café")
+        idx.insert("cafe")
+        self.assertEqual(len(idx), 1)
+        self.assertEqual(idx.complete("caf"), "café")
+        self.assertEqual(idx.complete("cafe"), "café")
+
+    def test_draft_shows_accented_prefix_and_ghost(self):
+        idx = w.WordIndex()
+        idx.insert("não")
+        draft = w.WordDraft(idx)
+        draft.add("N")
+        draft.add("A")
+        self.assertEqual(draft.suggestion, "NÃO")
+        self.assertEqual(draft.shown_typed, "NÃ")
+        self.assertEqual(draft.ghost, "O")
+        draft.add("O")
+        self.assertEqual(draft.typed, "NAO")
+        self.assertEqual(draft.shown_typed, "NÃO")
+        self.assertEqual(draft.ghost, "")
+
+    def test_set_index_drops_old_suggestions(self):
+        en = w.WordIndex()
+        en.insert("hello")
+        pt = w.WordIndex()
+        pt.insert("que")
+        draft = w.WordDraft(en)
+        draft.add("H")
+        self.assertEqual(draft.suggestion, "HELLO")
+        draft.set_index(pt)
+        self.assertIs(draft.index, pt)
+        self.assertEqual(draft.typed, "H")
+        self.assertEqual(draft.suggestion, "H")
+        self.assertIsNone(draft.pinned)
+
     def test_log_glyph_complete(self):
         self.assertEqual(c.log_glyph("\t"), "OK")
         self.assertEqual(c.speak_word("\t"), "complete")
+
+
+class LanguageListTests(unittest.TestCase):
+    def test_lang_label(self):
+        self.assertEqual(w.lang_label("en-us"), "en-US")
+        self.assertEqual(w.lang_label("pt_br"), "pt-BR")
+        self.assertEqual(w.lang_label("es"), "es")
+        self.assertEqual(w.lang_label("fr"), "fr")
+
+    def test_lists_txt_files_alphabetically(self):
+        with tempfile.TemporaryDirectory() as raw:
+            folder = Path(raw)
+            (folder / "pt-br.txt").write_text("oi\n", encoding="utf-8")
+            (folder / "en-us.txt").write_text("the\n", encoding="utf-8")
+            (folder / "zz.txt").write_text("z\n", encoding="utf-8")
+            (folder / "fr.txt").write_text("de\n", encoding="utf-8")
+            (folder / "notes.md").write_text("skip", encoding="utf-8")
+            labels = [label for label, _ in w.list_languages(folder)]
+            self.assertEqual(labels, ["en-US", "fr", "pt-BR", "zz"])
+            self.assertEqual(w.resolve_wordlist("en-US", folder).name, "en-us.txt")
+            self.assertEqual(w.resolve_wordlist("zz", folder).name, "zz.txt")
+            dropped = folder / "de.txt"
+            dropped.write_text("und\n", encoding="utf-8")
+            labels = [label for label, _ in w.list_languages(folder)]
+            self.assertEqual(labels, ["de", "en-US", "fr", "pt-BR", "zz"])
+
+    def test_shipped_langs_include_default_en_us(self):
+        labels = [label for label, _ in w.list_languages()]
+        self.assertEqual(labels, sorted(labels, key=str.casefold))
+        self.assertEqual(w.DEFAULT_LANG, "en-US")
+        for name in ("en-US", "es", "fr", "pt-BR"):
+            self.assertIn(name, labels)
+        self.assertEqual(w.resolve_wordlist().name, "en-us.txt")
+
+    def test_portuguese_completes_folded_forms(self):
+        idx = w.load_index(w.resolve_wordlist("pt-BR"))
+        self.assertGreater(len(idx), 1000)
+        self.assertEqual(idx.complete("nao"), "não")
+        self.assertEqual(idx.complete("voce"), "você")
+        self.assertEqual(idx.complete("que"), "que")
+        with w.resolve_wordlist("pt-BR").open(encoding="utf-8") as fh:
+            body = [ln.strip() for ln in fh if ln.strip() and not ln.startswith("#")]
+        self.assertIn("não", body)
+        self.assertIn("você", body)
+        self.assertIn("mês", body)
+        self.assertIn("e", body)
+        self.assertIn("a", body)
+        self.assertIn("o", body)
+        self.assertIn("mês", idx.words)
+        self.assertNotIn("nao", body)
+        for junk in ("vocecirc", "shack", "the", "you", "baby", "yeah"):
+            self.assertNotIn(junk, body)
+
+
+def _demo_gui() -> c.LinearCaptureGui:
+    return c.LinearCaptureGui(c.parse_args(["--demo"]))
+
+
+class LanguageGuiTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.orig_path = c.CONFIG_PATH
+        c.CONFIG_PATH = Path(self.tmp.name) / "config.json"
+
+    def tearDown(self):
+        c.CONFIG_PATH = self.orig_path
+        self.tmp.cleanup()
+
+    def test_default_language_is_en_us(self):
+        gui = _demo_gui()
+        self.assertEqual(gui.lang, "en-US")
+        labels = [label for label, _ in gui.lang_options]
+        self.assertEqual(labels, sorted(labels, key=str.casefold))
+        self.assertEqual(gui.lexicon.complete("th"), "the")
+
+    def test_switching_language_reloads_trie(self):
+        gui = _demo_gui()
+        old_id = id(gui.lexicon)
+        gui.set_language("pt-BR")
+        self.assertEqual(gui.lang, "pt-BR")
+        self.assertNotEqual(id(gui.lexicon), old_id)
+        self.assertIs(gui.draft.index, gui.lexicon)
+        self.assertEqual(gui.lexicon.complete("nao"), "não")
+        self.assertEqual(gui.lexicon.complete("voce"), "você")
+
+
+class PunctCommitTests(unittest.TestCase):
+    def _gui_with(self, letters: str) -> c.LinearCaptureGui:
+        gui = _demo_gui()
+        for ch in letters:
+            gui.draft.add(ch)
+        return gui
+
+    def test_period_moves_current_word_to_transcript(self):
+        gui = self._gui_with("HI")
+        gui.emit(".")
+        self.assertEqual("".join(gui.typed), "HI. ")
+        self.assertEqual(gui.draft.typed, "")
+
+    def test_comma_and_question_commit_like_period(self):
+        gui = self._gui_with("YES")
+        gui.emit("?")
+        self.assertEqual("".join(gui.typed), "YES? ")
+        self.assertEqual(gui.draft.typed, "")
+        gui = self._gui_with("HI")
+        gui.emit(",")
+        self.assertEqual("".join(gui.typed), "HI, ")
+        self.assertEqual(gui.draft.typed, "")
+
+    def test_punct_with_empty_word_still_types_the_mark(self):
+        gui = self._gui_with("")
+        gui.emit(".")
+        self.assertEqual("".join(gui.typed), ". ")
+        self.assertEqual(gui.draft.typed, "")
+
+    def test_punct_replaces_trailing_space_after_committed_word(self):
+        gui = self._gui_with("HI")
+        gui.emit(" ")
+        self.assertEqual("".join(gui.typed), "HI ")
+        gui.emit(".")
+        self.assertEqual("".join(gui.typed), "HI. ")
+        self.assertEqual(gui.draft.typed, "")
+
+    def test_punct_attaches_when_committed_word_has_no_space(self):
+        gui = self._gui_with("")
+        gui.typed = list("HI")
+        gui.line = "HI"
+        gui.emit("?")
+        self.assertEqual("".join(gui.typed), "HI? ")
+        self.assertEqual(gui.draft.typed, "")
+
+    def test_punct_on_second_word_keeps_the_earlier_space(self):
+        gui = self._gui_with("HI")
+        gui.emit(" ")
+        for ch in "THERE":
+            gui.draft.add(ch)
+        gui.emit(",")
+        self.assertEqual("".join(gui.typed), "HI THERE, ")
+        self.assertEqual(gui.draft.typed, "")
+
+    def test_second_punct_is_not_captured(self):
+        gui = self._gui_with("HI")
+        gui.emit(".")
+        gui.emit("?")
+        self.assertEqual("".join(gui.typed), "HI. ")
+        gui.emit(",")
+        self.assertEqual("".join(gui.typed), "HI. ")
 
 
 if __name__ == "__main__":

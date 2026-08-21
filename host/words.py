@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""Prefix trie for English autocomplete on the needle capture GUI.
+"""Prefix trie for autocomplete on the needle capture GUI.
 
-Word list: Peter Norvig's 1-gram counts from the Google Web Trillion Word
-Corpus (https://norvig.com/ngrams/count_1w.txt). We keep the 40,000 most
-common alphabetic tokens; line order is frequency rank (1 = most common).
+Word lists live in langs/*.txt (one language per file). Line order is
+frequency rank (1 = most common). Accented spellings are kept in the file;
+lookup folds them to ASCII so the A–Z grid can match não / café / niño.
 """
 
 from __future__ import annotations
 
+import unicodedata
 from pathlib import Path
 
-DEFAULT_WORDLIST = Path(__file__).resolve().parent / "data" / "en-40k.txt"
+LANGS_DIR = Path(__file__).resolve().parent / "langs"
+DEFAULT_LANG = "en-US"
+DEFAULT_WORDLIST = LANGS_DIR / "en-us.txt"
 MAX_FUZZY_DIST = 2
 MIN_FUZZY_LETTERS = 2
 
@@ -38,29 +41,35 @@ class WordIndex:
         return len(self.words)
 
     def insert(self, word: str) -> None:
-        word = word.lower()
-        if not word.isalpha():
+        original = word.strip().lower()
+        key = fold_letters(original)
+        if not key:
             return
         rank = len(self.words)
         if self.root.best is None:
-            self.root.best = word
+            self.root.best = original
         node = self.root
-        for ch in word:
+        for ch in key:
             kid = node.kids.get(ch)
             if kid is None:
                 kid = _Node()
                 node.kids[ch] = kid
             node = kid
             if node.best is None:
-                node.best = word
-        node.word = word
+                node.best = original
+        if node.word is not None:
+            return
+        node.word = original
         node.rank = rank
-        self.words.append(word)
+        self.words.append(original)
 
     def complete(self, prefix: str) -> str | None:
         """Most common dictionary word that starts with `prefix`."""
+        key = fold_letters(prefix)
+        if not key:
+            return None
         node = self.root
-        for ch in prefix.lower():
+        for ch in key:
             node = node.kids.get(ch)
             if node is None:
                 return None
@@ -70,12 +79,15 @@ class WordIndex:
         """Best prefix completion, else a nearby word (edit distance ≤ 2)."""
         if not letters or not letters.isalpha():
             return None
-        hit = self.complete(letters)
+        key = fold_letters(letters)
+        if not key:
+            return None
+        hit = self.complete(key)
         if hit is not None:
             return hit
-        if len(letters) < MIN_FUZZY_LETTERS:
+        if len(key) < MIN_FUZZY_LETTERS:
             return None
-        return self._fuzzy(letters.lower())
+        return self._fuzzy(key)
 
     def _fuzzy(self, letters: str) -> str | None:
         """Nearest dictionary word within MAX_FUZZY_DIST, walking the trie.
@@ -160,20 +172,38 @@ class WordDraft:
         return val
 
     @property
+    def shown_typed(self) -> str:
+        """Typed letters, using the suggestion's accents on a prefix match."""
+        typed = self.typed
+        sug = self.suggestion
+        if not typed:
+            return typed
+        ft, fs = fold_letters(typed), fold_letters(sug)
+        if fs.startswith(ft):
+            return original_prefix(sug, ft)
+        return typed
+
+    @property
     def ghost(self) -> str:
         """Remainder of a prefix completion, else empty (fuzzy is not a ghost)."""
         if self.pinned is not None:
             return ""
         typed = self.typed
         sug = self.suggestion
-        if typed and sug.startswith(typed):
-            return sug[len(typed) :]
+        if not typed:
+            return ""
+        ft, fs = fold_letters(typed), fold_letters(sug)
+        if fs.startswith(ft):
+            return original_suffix(sug, ft)
         return ""
 
     @property
     def is_prefix(self) -> bool:
-        return bool(self.ghost) or (
-            bool(self.typed) and self.suggestion == self.typed
+        typed = self.typed
+        if not typed:
+            return False
+        return bool(self.ghost) or fold_letters(self.suggestion) == fold_letters(
+            typed
         )
 
     def add(self, char: str) -> None:
@@ -207,11 +237,84 @@ class WordDraft:
         self.clear()
         return word
 
+    def set_index(self, index: WordIndex) -> None:
+        """Swap the dictionary and drop cached suggestions from the old one."""
+        self.index = index
+        self.pinned = None
+        self._sug_cache_key = None
+        self._sug_cache_val = ""
+
+
+def original_prefix(word: str, folded_prefix: str) -> str:
+    """Leading characters of `word` whose fold covers `folded_prefix`."""
+    need = len(folded_prefix)
+    n = 0
+    for i, ch in enumerate(word):
+        n += len(fold_letters(ch))
+        if n >= need:
+            return word[: i + 1]
+    return word
+
+
+def original_suffix(word: str, folded_prefix: str) -> str:
+    """Characters of `word` after the folded prefix."""
+    return word[len(original_prefix(word, folded_prefix)) :]
+
+
+def fold_letters(word: str) -> str:
+    """ASCII letters only, so the A–Z grid matches accented dictionary words."""
+    lowered = (
+        word.lower().replace("œ", "oe").replace("æ", "ae").replace("ß", "ss")
+    )
+    stripped = "".join(
+        ch
+        for ch in unicodedata.normalize("NFKD", lowered)
+        if not unicodedata.combining(ch)
+    )
+    ascii_letters = stripped.encode("ascii", "ignore").decode("ascii")
+    return "".join(ch for ch in ascii_letters if ch.isalpha())
+
+
+def lang_label(stem: str) -> str:
+    """en-us → en-US, pt_br → pt-BR, es → es."""
+    parts = [p for p in stem.replace("_", "-").split("-") if p]
+    if not parts:
+        return stem
+    lang = parts[0].lower()
+    if len(parts) == 1:
+        return lang
+    return f"{lang}-{'-'.join(p.upper() for p in parts[1:])}"
+
+
+def list_languages(folder: Path | None = None) -> list[tuple[str, Path]]:
+    """(label, path) for every .txt in langs/, sorted alphabetically by label."""
+    root = folder or LANGS_DIR
+    if not root.is_dir():
+        return []
+    found: list[tuple[str, Path]] = []
+    for path in root.iterdir():
+        if path.is_file() and path.suffix.lower() == ".txt":
+            found.append((lang_label(path.stem), path))
+    found.sort(key=lambda item: item[0].casefold())
+    return found
+
+
+def resolve_wordlist(
+    lang: str | None = None, folder: Path | None = None
+) -> Path | None:
+    langs = list_languages(folder)
+    by_label = {label: path for label, path in langs}
+    if lang and lang in by_label:
+        return by_label[lang]
+    if DEFAULT_LANG in by_label:
+        return by_label[DEFAULT_LANG]
+    return langs[0][1] if langs else None
+
 
 def load_index(path: Path | None = None) -> WordIndex:
     index = WordIndex()
-    src = path or DEFAULT_WORDLIST
-    if not src.is_file():
+    src = path if path is not None else resolve_wordlist()
+    if src is None or not src.is_file():
         return index
     with src.open(encoding="utf-8") as fh:
         for line in fh:
@@ -255,7 +358,8 @@ def take_last_word(chars: list[str]) -> str | None:
 
 
 if __name__ == "__main__":
-    idx = load_index()
-    print(f"{len(idx)} words from {DEFAULT_WORDLIST}")
+    src = resolve_wordlist()
+    idx = load_index(src)
+    print(f"{len(idx)} words from {src}")
     for prefix in ("th", "hel", "spir", "love", "yes"):
         print(f"  {prefix} -> {idx.complete(prefix)}")

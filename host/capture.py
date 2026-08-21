@@ -2,13 +2,17 @@
 """Linear-grid capture. Small needle turns step to the previous or next character.
 
 This layout shows ten characters per row, with space, complete, backspace,
-then enter at the right of every line (letters ␣ ✓ ⌫ ↵). Numbers follow on
+then enter at the right of every line (letters ␣ ✓ ⌫ ↵). Period, comma, and
+question mark sit after Z, same cell size as a letter. Numbers follow on
 their own row. Each cell — letter or control — owns the same amount of
 needle travel (default 10°), so the grid is not squeezed into one 360° turn.
 
 Letters go into a current-word box in the middle of the transcript.
-Space commits the letters you actually typed. Complete (✓) takes the
-suggested dictionary word so the needle does not have to finish it.
+Space commits the letters you actually typed. Period, comma, and question
+mark also finish the current word and move it into the transcript with
+that mark. If the last committed word already has a trailing space, the
+mark replaces that space (HELLO[space] + . → HELLO.). Complete (✓) takes
+the suggested dictionary word so the needle does not have to finish it.
 
 Each session:
   1. Starts paused. Setup the board and click Start Capture (or press P).
@@ -26,6 +30,7 @@ Each session:
 from __future__ import annotations
 
 import argparse
+import gc
 import glob
 import json
 import math
@@ -301,6 +306,7 @@ def load_config() -> dict:
             "delay_s": DEFAULT_DELAY_S,
             "wrap_cols": DEFAULT_WRAP_COLS,
             "still_tol_deg": DEFAULT_STILL_TOL_DEG,
+            "lang": w.DEFAULT_LANG,
         }
     data = json.loads(CONFIG_PATH.read_text())
     delay_s = float(data.get("delay_s", DEFAULT_DELAY_S))
@@ -312,12 +318,14 @@ def load_config() -> dict:
     still_tol_deg = float(data.get("still_tol_deg", DEFAULT_STILL_TOL_DEG))
     if still_tol_deg <= 0:
         still_tol_deg = DEFAULT_STILL_TOL_DEG
+    lang = str(data.get("lang", w.DEFAULT_LANG)).strip() or w.DEFAULT_LANG
     return {
         "offset": float(data.get("offset", 0.0)),
         "invert": bool(data.get("invert", False)),
         "delay_s": delay_s,
         "wrap_cols": wrap_cols,
         "still_tol_deg": still_tol_deg,
+        "lang": lang,
     }
 
 
@@ -327,6 +335,7 @@ def save_config(
     delay_s: float | None = None,
     wrap_cols: int | None = None,
     still_tol_deg: float | None = None,
+    lang: str | None = None,
 ) -> None:
     cfg = load_config()
     if delay_s is None:
@@ -339,6 +348,8 @@ def save_config(
         still_tol_deg = cfg["still_tol_deg"]
     if still_tol_deg <= 0:
         still_tol_deg = DEFAULT_STILL_TOL_DEG
+    if lang is None:
+        lang = str(cfg.get("lang", w.DEFAULT_LANG))
     if points:
         a = next(
             (p["angle"] for p in points if p["char"] == "A"),
@@ -353,6 +364,7 @@ def save_config(
         "delay_s": round(float(delay_s), 3),
         "wrap_cols": int(wrap_cols),
         "still_tol_deg": round(float(still_tol_deg), 3),
+        "lang": lang,
     }
     if points:
         payload["points"] = [
@@ -1139,6 +1151,9 @@ _SPEAK_WORDS = {
     " ": "space",
     "\b": "backspace",
     "\t": "complete",
+    ".": "period",
+    ",": "comma",
+    "?": "question mark",
     "0": "zero",
     "1": "one",
     "2": "two",
@@ -1256,6 +1271,29 @@ def should_wrap_line(line: str, char: str, wrap_cols: int) -> bool:
     """New line after wrap_cols characters."""
     del char
     return len(line) >= wrap_cols
+
+
+def apply_punct(chars: list[str], mark: str, current_word: str = "") -> bool:
+    """Attach `mark` to the last word, replacing a trailing space if present.
+
+    `current_word` is letters still in the word box; they are committed first
+    so HELLO + . becomes HELLO. A word already in `chars` keeps its letters
+    and only loses a leftover space: "HELLO " + . → "HELLO. ".
+
+    Returns False (and changes nothing) if the last non-space character is
+    already punctuation, so ".?" / ".." are not captured.
+    """
+    trial = list(chars)
+    if current_word:
+        trial.extend(current_word)
+    while trial and trial[-1] == " ":
+        trial.pop()
+    if trial and trial[-1] in PUNCT:
+        return False
+    trial.append(mark)
+    trial.append(" ")
+    chars[:] = trial
+    return True
 
 
 def open_serial(port: str, baud: int) -> serial.Serial:
@@ -1487,6 +1525,7 @@ BS = "⌫"
 ACCEPT = "✓"
 ENTER = "↵"
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+PUNCT = ".,?"
 DIGITS = "0123456789"
 
 
@@ -1511,7 +1550,7 @@ def _rows_with_ends(seq: str, n: int) -> list[list[str | None]]:
     ]
 
 
-LETTER_ROWS = _rows_with_ends(LETTERS, CONTENT_COLS)
+LETTER_ROWS = _rows_with_ends(LETTERS + PUNCT, CONTENT_COLS)
 DIGIT_ROWS = _rows_with_ends(DIGITS, CONTENT_COLS)
 GRID_ROWS = LETTER_ROWS + DIGIT_ROWS
 KEYS = [ch for row in GRID_ROWS for ch in row if ch is not None]
@@ -1629,6 +1668,16 @@ class LinearCaptureGui:
         self.invert = bool(args.invert or cfg["invert"])
         self.sound = bool(args.sound)
         self.autocomplete = True
+        self.lang = str(cfg.get("lang", w.DEFAULT_LANG))
+        self.lang_open = False
+        self.lang_options = w.list_languages()
+        labels = [label for label, _ in self.lang_options]
+        if self.lang not in labels:
+            self.lang = (
+                w.DEFAULT_LANG
+                if w.DEFAULT_LANG in labels
+                else (labels[0] if labels else w.DEFAULT_LANG)
+            )
         self.demo = bool(args.demo)
         self.log_dir: Path = args.log_dir
         self.step_deg = max(4.0, float(args.step))
@@ -1657,7 +1706,7 @@ class LinearCaptureGui:
         self.scroll_offset = 0
         self._output_max_lines = 1
         self._output_max_chars = 8
-        self.lexicon = w.load_index()
+        self.lexicon = w.load_index(w.resolve_wordlist(self.lang))
         self.draft = w.WordDraft(self.lexicon)
         self.draft.enabled = self.autocomplete
         self.txt_path: Path | None = None
@@ -1707,6 +1756,9 @@ class LinearCaptureGui:
         self.delay_label_pos = (0, 0)
         self.autocomplete_box = pygame.Rect(0, 0, 0, 0)
         self.autocomplete_label_pos = (0, 0)
+        self.lang_label_pos = (0, 0)
+        self.lang_dropdown_rect = pygame.Rect(0, 0, 0, 0)
+        self.lang_option_rects: list[tuple[str, pygame.Rect]] = []
         self.win_size = (WIN_W, WIN_H)
         self.layout(WIN_W, WIN_H)
         self.set_paused(True)
@@ -1799,6 +1851,10 @@ class LinearCaptureGui:
         by += rows * (radio_h + radio_gap) + 10
         self.autocomplete_box = pygame.Rect(px, by, 18, 18)
         self.autocomplete_label_pos = (px + 26, by - 2)
+        by += 32
+        self.lang_label_pos = (px, by)
+        by += 20
+        self.lang_dropdown_rect = pygame.Rect(px, by, pw, 30)
 
     def start_session_logs(self) -> None:
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -1810,7 +1866,7 @@ class LinearCaptureGui:
             f"# session start {started.isoformat(timespec='seconds')}\n"
             f"# invert={self.invert} mapper=gui-linear step_deg={self.step_deg} "
             f"delay_s={self.delay_s} wrap_cols={self.wrap_cols} "
-            f"words={len(self.lexicon)}\n"
+            f"lang={self.lang} words={len(self.lexicon)}\n"
         )
         self.log_header = header
         self.txt_path.write_text(header)
@@ -1972,7 +2028,7 @@ class LinearCaptureGui:
         else:
             self.write_log(f"SP  {word}")
             if self.sound:
-                speak_glyph(" ")
+                speak_glyph(word if via != "space" else " ")
 
     def _is_backspace(self, char: str) -> bool:
         return char in (BS, "\b")
@@ -1989,6 +2045,18 @@ class LinearCaptureGui:
         elif char == " ":
             word = self.draft.take_typed()
             self._commit_word(word, via="space")
+        elif char in PUNCT:
+            word = self.draft.typed
+            if apply_punct(self.typed, char, current_word=word):
+                self.draft.clear()
+                self._refresh_line()
+                self.rewrite_txt()
+                self._typed_rev += 1
+                self.scroll_offset = 0
+                text = f"{word}{char}" if word else char
+                self.write_log(f"SP  {text}" if word else log_glyph(char))
+                if self.sound:
+                    speak_glyph(text)
         elif self._is_enter(char):
             word = self.draft.take_typed()
             if word:
@@ -2095,6 +2163,9 @@ class LinearCaptureGui:
             return False
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
+                if self.lang_open:
+                    self.lang_open = False
+                    return False
                 return True
             if event.key == pygame.K_p:
                 self.set_paused(not self.paused)
@@ -2118,6 +2189,16 @@ class LinearCaptureGui:
         if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
             return False
         pos = event.pos
+        if self.lang_open:
+            for name, r in self.lang_option_rects:
+                if r.collidepoint(pos):
+                    self.set_language(name)
+                    self.lang_open = False
+                    return False
+            header = self.lang_dropdown_rect.collidepoint(pos)
+            self.lang_open = False
+            if header:
+                return False
         if self.btn_exit.hit(pos):
             return True
         if self.btn_pause.hit(pos):
@@ -2147,6 +2228,15 @@ class LinearCaptureGui:
         elif self.autocomplete_box.collidepoint(pos):
             self.autocomplete = not self.autocomplete
             self.draft.enabled = self.autocomplete
+        elif self.lang_dropdown_rect.collidepoint(pos):
+            self.lang_options = w.list_languages()
+            labels = [name for name, _ in self.lang_options]
+            if self.lang not in labels and labels:
+                fallback = (
+                    w.DEFAULT_LANG if w.DEFAULT_LANG in labels else labels[0]
+                )
+                self.set_language(fallback)
+            self.lang_open = True
         elif not self.paused:
             for i, rect in enumerate(self.cell_rects):
                 if rect.collidepoint(pos):
@@ -2380,6 +2470,23 @@ class LinearCaptureGui:
             btn.draw(surf, self.font_ui_b, btn.hit(mouse))
         self._draw_delay_radios(surf)
         self._draw_autocomplete_checkbox(surf)
+        self._draw_lang_dropdown(surf)
+
+    def set_language(self, label: str) -> None:
+        """Load a new word list, drop the previous trie, and keep the draft letters."""
+        options = w.list_languages()
+        self.lang_options = options
+        path = next((p for name, p in options if name == label), None)
+        if path is None or label == self.lang:
+            return
+        new_index = w.load_index(path)
+        old = self.lexicon
+        self.lexicon = new_index
+        self.draft.set_index(new_index)
+        self.lang = label
+        del old
+        gc.collect()
+        save_config(invert=self.invert, delay_s=self.delay_s, lang=label)
 
     def set_delay_s(self, seconds: float) -> None:
         if seconds not in DELAY_CHOICES:
@@ -2429,6 +2536,56 @@ class LinearCaptureGui:
             )
         label = self.font_ui.render("Auto-complete", True, TEXT_FG)
         surf.blit(label, self.autocomplete_label_pos)
+
+    def _draw_lang_dropdown(self, surf: pygame.Surface) -> None:
+        lx, ly = self.lang_label_pos
+        surf.blit(self.font_small.render("Language", True, MUTED), (lx, ly))
+        rect = self.lang_dropdown_rect
+        mouse = pygame.mouse.get_pos()
+        hover = rect.collidepoint(mouse) or self.lang_open
+        pygame.draw.rect(surf, BTN_HOVER if hover else BTN_BG, rect, border_radius=6)
+        pygame.draw.rect(
+            surf,
+            GOLD if self.lang_open else PANEL_LINE,
+            rect,
+            width=1,
+            border_radius=6,
+        )
+        chosen = self.font_ui.render(self.lang, True, WHITE)
+        surf.blit(
+            chosen,
+            (rect.x + 10, rect.y + (rect.h - chosen.get_height()) // 2),
+        )
+        chevron = self.font_ui.render("▴" if self.lang_open else "▾", True, MUTED)
+        surf.blit(
+            chevron,
+            (
+                rect.right - chevron.get_width() - 10,
+                rect.y + (rect.h - chevron.get_height()) // 2,
+            ),
+        )
+        self.lang_option_rects = []
+        if not self.lang_open:
+            return
+        options = w.list_languages()
+        self.lang_options = options
+        opt_h = 28
+        n = max(1, len(options))
+        y = rect.bottom + 2
+        menu = pygame.Rect(rect.x, y, rect.w, opt_h * n)
+        pygame.draw.rect(surf, BTN_BG, menu, border_radius=6)
+        pygame.draw.rect(surf, GOLD, menu, width=1, border_radius=6)
+        for i, (name, _path) in enumerate(options):
+            r = pygame.Rect(rect.x, y + i * opt_h, rect.w, opt_h)
+            self.lang_option_rects.append((name, r))
+            if r.collidepoint(mouse):
+                pygame.draw.rect(surf, BTN_HOVER, r, border_radius=4)
+            text = self.font_ui.render(
+                name, True, GOLD if name == self.lang else WHITE
+            )
+            surf.blit(
+                text, (r.x + 10, r.y + (r.h - text.get_height()) // 2)
+            )
 
     def _log_hint(self) -> str:
         if self.txt_path is not None:
@@ -2536,6 +2693,7 @@ class LinearCaptureGui:
         surf.blit(label, (card.centerx - label.get_width() // 2, card.y + 6))
 
         typed = self.draft.typed
+        shown = self.draft.shown_typed
         suggestion = self.draft.suggestion
         ghost = self.draft.ghost
         if not typed:
@@ -2543,8 +2701,8 @@ class LinearCaptureGui:
 
         hot = time.time() < self.flash_until
         max_w = inner.w - 16
-        if ghost or suggestion == typed:
-            tsurf = self.font_word.render(typed, True, GOLD if hot else WHITE)
+        if ghost or suggestion == shown:
+            tsurf = self.font_word.render(shown, True, GOLD if hot else WHITE)
             gsurf = (
                 self.font_word.render(ghost, True, GHOST_FG) if ghost else None
             )
